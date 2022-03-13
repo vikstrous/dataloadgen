@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// GenericLoaderConfig captures the config to create a new GenericLoader
-type GenericLoaderConfig[KeyT comparable, ValueT any] struct {
+// LoaderConfig captures the config to create a new Loader
+type LoaderConfig[KeyT comparable, ValueT any] struct {
 	// Fetch is a method that provides the data for the loader
 	Fetch func(keys []KeyT) ([]ValueT, []error)
 
@@ -17,17 +17,17 @@ type GenericLoaderConfig[KeyT comparable, ValueT any] struct {
 	MaxBatch int
 }
 
-// NewGenericLoader creates a new GenreicLoader given a fetch, wait, and maxBatch
-func NewGenericLoader[KeyT comparable, ValueT any](config GenericLoaderConfig[KeyT, ValueT]) *GenericLoader[KeyT, ValueT] {
-	return &GenericLoader[KeyT, ValueT]{
+// NewLoader creates a new GenreicLoader given a fetch, wait, and maxBatch
+func NewLoader[KeyT comparable, ValueT any](config LoaderConfig[KeyT, ValueT]) *Loader[KeyT, ValueT] {
+	return &Loader[KeyT, ValueT]{
 		fetch:    config.Fetch,
 		wait:     config.Wait,
 		maxBatch: config.MaxBatch,
 	}
 }
 
-// GenericLoader batches and caches requests
-type GenericLoader[KeyT comparable, ValueT any] struct {
+// Loader batches and caches requests
+type Loader[KeyT comparable, ValueT any] struct {
 	// this method provides the data for the loader
 	fetch func(keys []KeyT) ([]ValueT, []error)
 
@@ -44,13 +44,13 @@ type GenericLoader[KeyT comparable, ValueT any] struct {
 
 	// the current batch. keys will continue to be collected until timeout is hit,
 	// then everything will be sent to the fetch method and out to the listeners
-	batch *genericLoaderBatch[KeyT, ValueT]
+	batch *loaderBatch[KeyT, ValueT]
 
 	// mutex to prevent races
 	mu sync.Mutex
 }
 
-type genericLoaderBatch[KeyT comparable, ValueT any] struct {
+type loaderBatch[KeyT comparable, ValueT any] struct {
 	keys    []KeyT
 	data    []ValueT
 	error   []error
@@ -59,14 +59,14 @@ type genericLoaderBatch[KeyT comparable, ValueT any] struct {
 }
 
 // Load a ValueT by key, batching and caching will be applied automatically
-func (l *GenericLoader[KeyT, ValueT]) Load(key KeyT) (ValueT, error) {
+func (l *Loader[KeyT, ValueT]) Load(key KeyT) (ValueT, error) {
 	return l.LoadThunk(key)()
 }
 
 // LoadThunk returns a function that when called will block waiting for a ValueT.
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
-func (l *GenericLoader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
+func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 	l.mu.Lock()
 	if it, ok := l.cache[key]; ok {
 		l.mu.Unlock()
@@ -75,7 +75,7 @@ func (l *GenericLoader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error)
 		}
 	}
 	if l.batch == nil {
-		l.batch = &genericLoaderBatch[KeyT, ValueT]{done: make(chan struct{})}
+		l.batch = &loaderBatch[KeyT, ValueT]{done: make(chan struct{})}
 	}
 	batch := l.batch
 	pos := batch.keyIndex(l, key)
@@ -109,7 +109,7 @@ func (l *GenericLoader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error)
 
 // LoadAll fetches many keys at once. It will be broken into appropriate sized
 // sub batches depending on how the loader is configured
-func (l *GenericLoader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
+func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
 	results := make([]func() (ValueT, error), len(keys))
 
 	for i, key := range keys {
@@ -127,7 +127,7 @@ func (l *GenericLoader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
 // LoadAllThunk returns a function that when called will block waiting for a ValueT.
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
-func (l *GenericLoader[KeyT, ValueT]) LoadAllThunk(keys []KeyT) func() ([]ValueT, []error) {
+func (l *Loader[KeyT, ValueT]) LoadAllThunk(keys []KeyT) func() ([]ValueT, []error) {
 	results := make([]func() (ValueT, error), len(keys))
 	for i, key := range keys {
 		results[i] = l.LoadThunk(key)
@@ -145,7 +145,7 @@ func (l *GenericLoader[KeyT, ValueT]) LoadAllThunk(keys []KeyT) func() ([]ValueT
 // Prime the cache with the provided key and value. If the key already exists, no change is made
 // and false is returned.
 // (To forcefully prime the cache, clear the key first with loader.clear(key).prime(key, value).)
-func (l *GenericLoader[KeyT, ValueT]) Prime(key KeyT, value ValueT) bool {
+func (l *Loader[KeyT, ValueT]) Prime(key KeyT, value ValueT) bool {
 	l.mu.Lock()
 	var found bool
 	if _, found = l.cache[key]; !found {
@@ -156,13 +156,13 @@ func (l *GenericLoader[KeyT, ValueT]) Prime(key KeyT, value ValueT) bool {
 }
 
 // Clear the value at key from the cache, if it exists
-func (l *GenericLoader[KeyT, ValueT]) Clear(key KeyT) {
+func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 	l.mu.Lock()
 	delete(l.cache, key)
 	l.mu.Unlock()
 }
 
-func (l *GenericLoader[KeyT, ValueT]) unsafeSet(key KeyT, value ValueT) {
+func (l *Loader[KeyT, ValueT]) unsafeSet(key KeyT, value ValueT) {
 	if l.cache == nil {
 		l.cache = map[KeyT]ValueT{}
 	}
@@ -171,7 +171,7 @@ func (l *GenericLoader[KeyT, ValueT]) unsafeSet(key KeyT, value ValueT) {
 
 // keyIndex will return the location of the key in the batch, if its not found
 // it will add the key to the batch
-func (b *genericLoaderBatch[KeyT, ValueT]) keyIndex(l *GenericLoader[KeyT, ValueT], key KeyT) int {
+func (b *loaderBatch[KeyT, ValueT]) keyIndex(l *Loader[KeyT, ValueT], key KeyT) int {
 	for i, existingKey := range b.keys {
 		if key == existingKey {
 			return i
@@ -195,7 +195,7 @@ func (b *genericLoaderBatch[KeyT, ValueT]) keyIndex(l *GenericLoader[KeyT, Value
 	return pos
 }
 
-func (b *genericLoaderBatch[KeyT, ValueT]) startTimer(l *GenericLoader[KeyT, ValueT]) {
+func (b *loaderBatch[KeyT, ValueT]) startTimer(l *Loader[KeyT, ValueT]) {
 	time.Sleep(l.wait)
 	l.mu.Lock()
 
@@ -211,7 +211,7 @@ func (b *genericLoaderBatch[KeyT, ValueT]) startTimer(l *GenericLoader[KeyT, Val
 	b.end(l)
 }
 
-func (b *genericLoaderBatch[KeyT, ValueT]) end(l *GenericLoader[KeyT, ValueT]) {
+func (b *loaderBatch[KeyT, ValueT]) end(l *Loader[KeyT, ValueT]) {
 	b.data, b.error = l.fetch(b.keys)
 	close(b.done)
 }

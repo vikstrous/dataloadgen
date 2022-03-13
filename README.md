@@ -14,7 +14,7 @@ go get github.com/vikstrous/dataloadgen
 Here's an example constructing a loader and using it.
 
 ```go
-	loader := dataloadgen.NewGenericLoader(dataloadgen.GenericLoaderConfig[string, int]{
+	loader := dataloadgen.NewLoader(dataloadgen.LoaderConfig[string, int]{
 		Wait:     1 * time.Millisecond,
 		MaxBatch: 1,
 		Fetch: func(keys []string) (ret []int, errs []error) {
