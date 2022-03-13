@@ -5,25 +5,35 @@ import (
 	"time"
 )
 
-// LoaderConfig captures the config to create a new Loader
-type LoaderConfig[KeyT comparable, ValueT any] struct {
-	// Fetch is a method that provides the data for the loader
-	Fetch func(keys []KeyT) ([]ValueT, []error)
+// Option allows for configuration of loader fields.
+type Option[KeyT comparable, ValueT any] func(*Loader[KeyT, ValueT])
 
-	// Wait is how long wait before sending a batch
-	Wait time.Duration
+// WithBatchCapacity sets the batch capacity. Default is 0 (unbounded)
+func WithBatchCapacity[KeyT comparable, ValueT any](c int) Option[KeyT, ValueT] {
+	return func(l *Loader[KeyT, ValueT]) {
+		l.maxBatch = c
+	}
+}
 
-	// MaxBatch will limit the maximum number of keys to send in one batch, 0 = not limit
-	MaxBatch int
+// WithWait sets the amount of time to wait before triggering a batch.
+// Default duration is 16 milliseconds.
+func WithWait[KeyT comparable, ValueT any](d time.Duration) Option[KeyT, ValueT] {
+	return func(l *Loader[KeyT, ValueT]) {
+		l.wait = d
+	}
 }
 
 // NewLoader creates a new GenreicLoader given a fetch, wait, and maxBatch
-func NewLoader[KeyT comparable, ValueT any](config LoaderConfig[KeyT, ValueT]) *Loader[KeyT, ValueT] {
-	return &Loader[KeyT, ValueT]{
-		fetch:    config.Fetch,
-		wait:     config.Wait,
-		maxBatch: config.MaxBatch,
+func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, []error), options ...Option[KeyT, ValueT]) *Loader[KeyT, ValueT] {
+	l := &Loader[KeyT, ValueT]{
+		fetch:    fetch,
+		wait:     16 * time.Millisecond,
+		maxBatch: 0, //unlimited
 	}
+	for _, o := range options {
+		o(l)
+	}
+	return l
 }
 
 // Loader batches and caches requests
