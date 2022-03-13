@@ -36,6 +36,7 @@ type benchmarkUser struct {
 	Name string
 }
 
+// copied from https://github.com/vektah/dataloaden
 func BenchmarkLoaderFromDataloaden(b *testing.B) {
 	dl := dataloadgen.NewLoader(func(keys []string) ([]*benchmarkUser, []error) {
 		users := make([]*benchmarkUser, len(keys))
@@ -91,4 +92,48 @@ func BenchmarkLoaderFromDataloaden(b *testing.B) {
 		}
 		wg.Wait()
 	})
+}
+
+// copied and adapted from github.com/graph-gophers/dataloader
+func BenchmarkLoaderFromDataloader(b *testing.B) {
+	var a = &Avg{}
+	dl := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+		a.Add(len(keys))
+		results = make([]string, 0, len(keys))
+		errs = make([]error, 0, len(keys))
+		for _, key := range keys {
+			results = append(results, key)
+			errs = append(errs, nil)
+		}
+		return
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		dl.LoadThunk(strconv.Itoa(i))
+	}
+	b.Logf("avg: %f", a.Avg())
+}
+
+type Avg struct {
+	total  float64
+	length float64
+	lock   sync.RWMutex
+}
+
+func (a *Avg) Add(v int) {
+	a.lock.Lock()
+	a.total += float64(v)
+	a.length++
+	a.lock.Unlock()
+}
+
+func (a *Avg) Avg() float64 {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	if a.total == 0 {
+		return 0
+	} else if a.length == 0 {
+		return 0
+	}
+	return a.total / a.length
 }

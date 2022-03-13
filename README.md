@@ -15,7 +15,7 @@ See the example in the documentation: https://pkg.go.dev/github.com/vikstrous/da
 
 One enhancement over the origin is that this form uses functional options.
 
-The benchmark is copied from the upstream repo and the performance is unchanged:
+The benchmark BenchmarkLoaderFromDataloaden is copied from the upstream repo and the performance is unchanged:
 
 ```
 pkg: github.com/vikstrous/dataloadgen
@@ -24,3 +24,17 @@ BenchmarkLoaderFromDataloaden/caches-8         	10416878	       116.0 ns/op	    
 BenchmarkLoaderFromDataloaden/random_spread-8  	 1000000	      1062 ns/op	     348 B/op	       4 allocs/op
 BenchmarkLoaderFromDataloaden/concurently-8    	   26421	     51821 ns/op	    3152 B/op	      68 allocs/op
 ```
+
+The benchmark BenchmarkLoaderFromDataloader is copied from https://github.com/graph-gophers/dataloader and adapted.
+
+Upstream performance:
+```
+BenchmarkLoader-8        1215384               968.0 ns/op
+```
+
+This repo's performance on the same test (modified to call LoadThunk instead of Load because they mean the same thing):
+```
+BenchmarkLoaderFromDataloader-8           229976              5695 ns/op
+```
+
+The difference is explained by the lack of "input capacity" and excessive locking over the use of an input channel with capacity 1000.
