@@ -1,14 +1,14 @@
 package dataloadgen_test
 
 import (
+	"fmt"
 	"strconv"
-	"testing"
 	"time"
 
 	"github.com/vikstrous/dataloadgen"
 )
 
-func TestBasic(t *testing.T) {
+func ExampleLoader() {
 	loader := dataloadgen.NewLoader(dataloadgen.LoaderConfig[string, int]{
 		Wait:     1 * time.Millisecond,
 		MaxBatch: 1,
@@ -23,9 +23,8 @@ func TestBasic(t *testing.T) {
 	})
 	one, err := loader.Load("1")
 	if err != nil {
-		t.Fatalf("failed to load: %s", err)
+		panic(err)
 	}
-	if one != 1 {
-		t.Fatalf("wrong result: %d", one)
-	}
+	fmt.Println(one)
+	// Output: 1
 }
