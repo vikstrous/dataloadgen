@@ -51,7 +51,7 @@ type Loader[KeyT comparable, ValueT any] struct {
 	// INTERNAL
 
 	// lazily created cache
-	cache map[KeyT]ValueT
+	cache map[KeyT]func() (ValueT, error)
 
 	// the current batch. keys will continue to be collected until timeout is hit,
 	// then everything will be sent to the fetch method and out to the listeners
@@ -79,20 +79,17 @@ func (l *Loader[KeyT, ValueT]) Load(key KeyT) (ValueT, error) {
 // different data loaders without blocking until the thunk is called.
 func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	if it, ok := l.cache[key]; ok {
-		l.mu.Unlock()
-		return func() (ValueT, error) {
-			return it, nil
-		}
+		return it
 	}
 	if l.batch == nil {
 		l.batch = &loaderBatch[KeyT, ValueT]{done: make(chan struct{})}
 	}
 	batch := l.batch
 	pos := batch.keyIndex(l, key)
-	l.mu.Unlock()
 
-	return func() (ValueT, error) {
+	thunk := func() (ValueT, error) {
 		<-batch.done
 
 		var data ValueT
@@ -114,14 +111,10 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 			err = batch.error[pos]
 		}
 
-		if err == nil {
-			l.mu.Lock()
-			l.unsafeSet(key, data)
-			l.mu.Unlock()
-		}
-
 		return data, err
 	}
+	l.unsafeSet(key, thunk)
+	return thunk
 }
 
 // LoadAll fetches many keys at once. It will be broken into appropriate sized
@@ -173,7 +166,7 @@ func (l *Loader[KeyT, ValueT]) Prime(key KeyT, value ValueT) bool {
 	l.mu.Lock()
 	var found bool
 	if _, found = l.cache[key]; !found {
-		l.unsafeSet(key, value)
+		l.unsafeSet(key, func() (ValueT, error) { return value, nil })
 	}
 	l.mu.Unlock()
 	return !found
@@ -186,9 +179,9 @@ func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 	l.mu.Unlock()
 }
 
-func (l *Loader[KeyT, ValueT]) unsafeSet(key KeyT, value ValueT) {
+func (l *Loader[KeyT, ValueT]) unsafeSet(key KeyT, value func() (ValueT, error)) {
 	if l.cache == nil {
-		l.cache = map[KeyT]ValueT{}
+		l.cache = map[KeyT]func() (ValueT, error){}
 	}
 	l.cache[key] = value
 }

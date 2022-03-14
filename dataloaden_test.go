@@ -198,7 +198,7 @@ func TestUserLoader(t *testing.T) {
 		defer mu.Unlock()
 
 		require.Len(t, fetches, 3)
-		require.Len(t, fetches[2], 3) // E1 U9 E2 in some random order
+		require.Len(t, fetches[2], 1) // U9 only because E1 and E2 are already cached as failed and only U9 is new
 	})
 
 	t.Run("primed reads dont hit the fetcher", func(t *testing.T) {

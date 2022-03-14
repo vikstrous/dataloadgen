@@ -20,9 +20,9 @@ The benchmark BenchmarkLoaderFromDataloaden is copied from the upstream repo and
 ```
 pkg: github.com/vikstrous/dataloadgen
 cpu: Intel(R) Xeon(R) CPU @ 3.10GHz
-BenchmarkLoaderFromDataloaden/caches-8         	10416878	       116.0 ns/op	      34 B/op	       1 allocs/op
-BenchmarkLoaderFromDataloaden/random_spread-8  	 1000000	      1062 ns/op	     348 B/op	       4 allocs/op
-BenchmarkLoaderFromDataloaden/concurently-8    	   26421	     51821 ns/op	    3152 B/op	      68 allocs/op
+BenchmarkLoaderFromDataloaden/caches-8         	12597632	        94.85 ns/op	      10 B/op	       0 allocs/op
+BenchmarkLoaderFromDataloaden/random_spread-8  	 1000000	      1047 ns/op	     315 B/op	       4 allocs/op
+BenchmarkLoaderFromDataloaden/concurently-8    	   40258	     45855 ns/op	    5739 B/op	      68 allocs/op
 ```
 
 The benchmark BenchmarkLoaderFromDataloader is copied from https://github.com/graph-gophers/dataloader and adapted.
@@ -34,7 +34,7 @@ BenchmarkLoader-8        1215384               968.0 ns/op
 
 This repo's performance on the same test (modified to call LoadThunk instead of Load because they mean the same thing):
 ```
-BenchmarkLoaderFromDataloader-8           229976              5695 ns/op
+BenchmarkLoaderFromDataloader-8                   204468              6146 ns/op
 ```
 
 The difference is explained by the lack of "input capacity" and excessive locking over the use of an input channel with capacity 1000.
