@@ -1,6 +1,7 @@
 package dataloadgen
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -95,6 +96,12 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 		<-batch.done
 
 		var data ValueT
+
+		// If the batch function returned the wrong number of responses, return an error to all callers
+		if len(batch.data) != len(batch.keys) {
+			return data, fmt.Errorf("bug in loader: %d values returned for %d keys", len(batch.data), len(batch.keys))
+		}
+
 		if pos < len(batch.data) {
 			data = batch.data[pos]
 		}
@@ -128,8 +135,15 @@ func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
 
 	values := make([]ValueT, len(keys))
 	errors := make([]error, len(keys))
+	allNil := true
 	for i, thunk := range results {
 		values[i], errors[i] = thunk()
+		if errors[i] != nil {
+			allNil = false
+		}
+	}
+	if allNil {
+		return values, nil
 	}
 	return values, errors
 }
