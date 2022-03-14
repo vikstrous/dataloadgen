@@ -84,7 +84,7 @@ func BenchmarkDataloader(b *testing.B) {
 			wg.Add(1)
 			go func(i int) {
 				for j := 0; j < b.N; j++ {
-					dl.Load(ctx, queries[i*b.N+j])
+					dl.Load(ctx, queries[i*b.N+j])()
 				}
 				wg.Done()
 			}(i)
