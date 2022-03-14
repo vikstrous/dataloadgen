@@ -13,28 +13,20 @@ go get github.com/vikstrous/dataloadgen
 
 See the example in the documentation: https://pkg.go.dev/github.com/vikstrous/dataloadgen
 
-One enhancement over the origin is that this form uses functional options.
+This package has evolved to include some ideas from dataloader https://github.com/graph-gophers/dataloader
 
-The benchmark BenchmarkLoaderFromDataloaden is copied from the upstream repo and the performance is unchanged:
+Benchmarks show that this package is faster than both of the above and offers the best of both worlds.
 
 ```
-pkg: github.com/vikstrous/dataloadgen
-cpu: Intel(R) Xeon(R) CPU @ 3.10GHz
-BenchmarkLoaderFromDataloaden/caches-8         	12597632	        94.85 ns/op	      10 B/op	       0 allocs/op
-BenchmarkLoaderFromDataloaden/random_spread-8  	 1000000	      1047 ns/op	     315 B/op	       4 allocs/op
-BenchmarkLoaderFromDataloaden/concurently-8    	   40258	     45855 ns/op	    5739 B/op	      68 allocs/op
-```
+BenchmarkDataloader/caches-8                     3963708               301.9 ns/op           162 B/op          4 allocs/op
+BenchmarkDataloader/random_spread-8               642184              1961 ns/op             736 B/op         14 allocs/op
+BenchmarkDataloader/concurently-8                  17191             85223 ns/op           45449 B/op        200 allocs/op
 
-The benchmark BenchmarkLoaderFromDataloader is copied from https://github.com/graph-gophers/dataloader and adapted.
+BenchmarkDataloaden/caches-8                    10976748               108.6 ns/op            26 B/op          1 allocs/op
+BenchmarkDataloaden/random_spread-8              1000000              1107 ns/op             331 B/op          4 allocs/op
+BenchmarkDataloaden/concurently-8                  23605             53127 ns/op            2984 B/op         68 allocs/op
 
-Upstream performance:
+BenchmarkDataloadgen/caches-8                   12434064                97.04 ns/op           10 B/op          0 allocs/op
+BenchmarkDataloadgen/random_spread-8             1000000              1088 ns/op             307 B/op          3 allocs/op
+BenchmarkDataloadgen/concurently-8                 39688             30788 ns/op            2729 B/op         60 allocs/op
 ```
-BenchmarkLoader-8        1215384               968.0 ns/op
-```
-
-This repo's performance on the same test (modified to call LoadThunk instead of Load because they mean the same thing):
-```
-BenchmarkLoaderFromDataloader-8                   204468              6146 ns/op
-```
-
-The difference is explained by the lack of "input capacity" and excessive locking over the use of an input channel with capacity 1000.

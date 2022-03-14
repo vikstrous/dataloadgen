@@ -30,6 +30,7 @@ func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, [
 		fetch:    fetch,
 		wait:     16 * time.Millisecond,
 		maxBatch: 0, //unlimited
+		cache:    map[KeyT]func() (ValueT, error){},
 	}
 	for _, o := range options {
 		o(l)
@@ -113,7 +114,7 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 
 		return data, err
 	}
-	l.unsafeSet(key, thunk)
+	l.cache[key] = thunk
 	return thunk
 }
 
@@ -166,7 +167,7 @@ func (l *Loader[KeyT, ValueT]) Prime(key KeyT, value ValueT) bool {
 	l.mu.Lock()
 	var found bool
 	if _, found = l.cache[key]; !found {
-		l.unsafeSet(key, func() (ValueT, error) { return value, nil })
+		l.cache[key] = func() (ValueT, error) { return value, nil }
 	}
 	l.mu.Unlock()
 	return !found
@@ -177,13 +178,6 @@ func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 	l.mu.Lock()
 	delete(l.cache, key)
 	l.mu.Unlock()
-}
-
-func (l *Loader[KeyT, ValueT]) unsafeSet(key KeyT, value func() (ValueT, error)) {
-	if l.cache == nil {
-		l.cache = map[KeyT]func() (ValueT, error){}
-	}
-	l.cache[key] = value
 }
 
 // keyIndex will return the location of the key in the batch, if its not found
@@ -198,37 +192,34 @@ func (b *loaderBatch[KeyT, ValueT]) keyIndex(l *Loader[KeyT, ValueT], key KeyT) 
 	pos := len(b.keys)
 	b.keys = append(b.keys, key)
 	if pos == 0 {
-		go b.startTimer(l)
+		go func(l *Loader[KeyT, ValueT]) {
+			time.Sleep(l.wait)
+			l.mu.Lock()
+
+			// we must have hit a batch limit and are already finalizing this batch
+			if b.closing {
+				l.mu.Unlock()
+				return
+			}
+
+			l.batch = nil
+			l.mu.Unlock()
+
+			b.data, b.error = l.fetch(b.keys)
+			close(b.done)
+		}(l)
 	}
 
 	if l.maxBatch != 0 && pos >= l.maxBatch-1 {
 		if !b.closing {
 			b.closing = true
 			l.batch = nil
-			go b.end(l)
+			go func(l *Loader[KeyT, ValueT]) {
+				b.data, b.error = l.fetch(b.keys)
+				close(b.done)
+			}(l)
 		}
 	}
 
 	return pos
-}
-
-func (b *loaderBatch[KeyT, ValueT]) startTimer(l *Loader[KeyT, ValueT]) {
-	time.Sleep(l.wait)
-	l.mu.Lock()
-
-	// we must have hit a batch limit and are already finalizing this batch
-	if b.closing {
-		l.mu.Unlock()
-		return
-	}
-
-	l.batch = nil
-	l.mu.Unlock()
-
-	b.end(l)
-}
-
-func (b *loaderBatch[KeyT, ValueT]) end(l *Loader[KeyT, ValueT]) {
-	b.data, b.error = l.fetch(b.keys)
-	close(b.done)
 }
