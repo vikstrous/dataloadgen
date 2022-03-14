@@ -32,8 +32,8 @@ func TestUserLoader(t *testing.T) {
 		}
 		return users, errors
 	},
-		dataloadgen.WithBatchCapacity[string, *benchmarkUser](5),
-		dataloadgen.WithWait[string, *benchmarkUser](10*time.Millisecond),
+		dataloadgen.WithBatchCapacity(5),
+		dataloadgen.WithWait(10*time.Millisecond),
 	)
 
 	t.Run("fetch concurrent data", func(t *testing.T) {

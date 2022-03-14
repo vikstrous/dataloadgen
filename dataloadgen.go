@@ -7,35 +7,46 @@ import (
 )
 
 // Option allows for configuration of loader fields.
-type Option[KeyT comparable, ValueT any] func(*Loader[KeyT, ValueT])
+type Option func(*loaderConfig)
 
 // WithBatchCapacity sets the batch capacity. Default is 0 (unbounded)
-func WithBatchCapacity[KeyT comparable, ValueT any](c int) Option[KeyT, ValueT] {
-	return func(l *Loader[KeyT, ValueT]) {
+func WithBatchCapacity(c int) Option {
+	return func(l *loaderConfig) {
 		l.maxBatch = c
 	}
 }
 
 // WithWait sets the amount of time to wait before triggering a batch.
 // Default duration is 16 milliseconds.
-func WithWait[KeyT comparable, ValueT any](d time.Duration) Option[KeyT, ValueT] {
-	return func(l *Loader[KeyT, ValueT]) {
+func WithWait(d time.Duration) Option {
+	return func(l *loaderConfig) {
 		l.wait = d
 	}
 }
 
 // NewLoader creates a new GenreicLoader given a fetch, wait, and maxBatch
-func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, []error), options ...Option[KeyT, ValueT]) *Loader[KeyT, ValueT] {
-	l := &Loader[KeyT, ValueT]{
-		fetch:    fetch,
+func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, []error), options ...Option) *Loader[KeyT, ValueT] {
+	config := &loaderConfig{
 		wait:     16 * time.Millisecond,
 		maxBatch: 0, //unlimited
-		cache:    map[KeyT]func() (ValueT, error){},
 	}
 	for _, o := range options {
-		o(l)
+		o(config)
+	}
+	l := &Loader[KeyT, ValueT]{
+		fetch:        fetch,
+		loaderConfig: config,
+		cache:        map[KeyT]func() (ValueT, error){},
 	}
 	return l
+}
+
+type loaderConfig struct {
+	// how long to done before sending a batch
+	wait time.Duration
+
+	// this will limit the maximum number of keys to send in one batch, 0 = no limit
+	maxBatch int
 }
 
 // Loader batches and caches requests
@@ -43,11 +54,7 @@ type Loader[KeyT comparable, ValueT any] struct {
 	// this method provides the data for the loader
 	fetch func(keys []KeyT) ([]ValueT, []error)
 
-	// how long to done before sending a batch
-	wait time.Duration
-
-	// this will limit the maximum number of keys to send in one batch, 0 = no limit
-	maxBatch int
+	*loaderConfig
 
 	// INTERNAL
 

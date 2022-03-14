@@ -20,8 +20,8 @@ func ExampleLoader() {
 		}
 		return
 	},
-		dataloadgen.WithBatchCapacity[string, int](1),
-		dataloadgen.WithWait[string, int](16*time.Millisecond),
+		dataloadgen.WithBatchCapacity(1),
+		dataloadgen.WithWait(16*time.Millisecond),
 	)
 	one, err := loader.Load("1")
 	if err != nil {
@@ -51,8 +51,8 @@ func TestEdgeCases(t *testing.T) {
 		}
 		return results, errors
 	},
-		dataloadgen.WithBatchCapacity[int, string](5),
-		dataloadgen.WithWait[int, string](1*time.Millisecond),
+		dataloadgen.WithBatchCapacity(5),
+		dataloadgen.WithWait(1*time.Millisecond),
 	)
 
 	t.Run("load function called only once when cached", func(t *testing.T) {

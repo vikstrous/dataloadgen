@@ -490,7 +490,7 @@ func IDLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 			results = append(results, key)
 		}
 		return results, nil
-	}, dataloadgen.WithBatchCapacity[string, string](max))
+	}, dataloadgen.WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 
@@ -505,7 +505,7 @@ func BatchOnlyLoader(max int) (*dataloadgen.Loader[string, string], *[][]string)
 			results = append(results, key)
 		}
 		return results, nil
-	}, dataloadgen.WithBatchCapacity[string, string](max)) //dataloadgen.WithClearCacheOnBatch[string, string]())
+	}, dataloadgen.WithBatchCapacity(max)) //dataloadgen.WithClearCacheOnBatch())
 	return identityLoader, &loadCalls
 }
 func ErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
@@ -520,7 +520,7 @@ func ErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 			errs = append(errs, fmt.Errorf("this is a test error"))
 		}
 		return results, errs
-	}, dataloadgen.WithBatchCapacity[string, string](max))
+	}, dataloadgen.WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 func OneErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
@@ -541,14 +541,14 @@ func OneErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) 
 			errs[i] = err
 		}
 		return results, errs
-	}, dataloadgen.WithBatchCapacity[string, string](max))
+	}, dataloadgen.WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 func PanicLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var loadCalls [][]string
 	panicLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
 		panic("Programming error")
-	}, dataloadgen.WithBatchCapacity[string, string](max)) //, withSilentLogger())
+	}, dataloadgen.WithBatchCapacity(max)) //, withSilentLogger())
 	return panicLoader, &loadCalls
 }
 func BadLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
@@ -560,7 +560,7 @@ func BadLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 		mu.Unlock()
 		results = append(results, keys[0])
 		return results, nil
-	}, dataloadgen.WithBatchCapacity[string, string](max))
+	}, dataloadgen.WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 
@@ -576,7 +576,7 @@ func NoCacheLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 			results = append(results, key)
 		}
 		return results, nil
-	}, /*dataloadgen.WithCache[string, string](cache),*/ dataloadgen.WithBatchCapacity[string, string](max))
+	}, /*dataloadgen.WithCache(cache),*/ dataloadgen.WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
 

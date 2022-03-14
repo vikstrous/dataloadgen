@@ -118,8 +118,8 @@ func BenchmarkDataloadgen(b *testing.B) {
 		}
 		return users, errors
 	},
-		dataloadgen.WithBatchCapacity[int, benchmarkUser](100),
-		dataloadgen.WithWait[int, benchmarkUser](500*time.Nanosecond),
+		dataloadgen.WithBatchCapacity(100),
+		dataloadgen.WithWait(500*time.Nanosecond),
 	)
 
 	b.Run("caches", func(b *testing.B) {
