@@ -24,7 +24,7 @@ func WithWait(d time.Duration) Option {
 	}
 }
 
-// NewLoader creates a new GenreicLoader given a fetch, wait, and maxBatch
+// NewLoader creates a new GenericLoader given a fetch, wait, and maxBatch
 func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, []error), options ...Option) *Loader[KeyT, ValueT] {
 	config := &loaderConfig{
 		wait:     16 * time.Millisecond,
@@ -169,7 +169,7 @@ func (l *Loader[KeyT, ValueT]) LoadAllThunk(keys []KeyT) func() ([]ValueT, []err
 
 // Prime the cache with the provided key and value. If the key already exists, no change is made
 // and false is returned.
-// (To forcefully prime the cache, clear the key first with loader.clear(key).prime(key, value).)
+// (To forcefully prime the cache, clear the key first with loader.Clear(key).Prime(key, value).)
 func (l *Loader[KeyT, ValueT]) Prime(key KeyT, value ValueT) bool {
 	l.mu.Lock()
 	var found bool
