@@ -130,17 +130,16 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 // LoadAll fetches many keys at once. It will be broken into appropriate sized
 // sub batches depending on how the loader is configured
 func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
-	results := make([]func() (ValueT, error), len(keys))
+	thunks := make([]func() (ValueT, error), len(keys))
 
 	for i, key := range keys {
-		// WARNING: This is slow because each LoadThunk call can sleep
-		results[i] = l.LoadThunk(key)
+		thunks[i] = l.LoadThunk(key)
 	}
 
 	values := make([]ValueT, len(keys))
 	errors := make([]error, len(keys))
 	allNil := true
-	for i, thunk := range results {
+	for i, thunk := range thunks {
 		values[i], errors[i] = thunk()
 		if errors[i] != nil {
 			allNil = false
@@ -156,15 +155,14 @@ func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
 func (l *Loader[KeyT, ValueT]) LoadAllThunk(keys []KeyT) func() ([]ValueT, []error) {
-	results := make([]func() (ValueT, error), len(keys))
+	thunks := make([]func() (ValueT, error), len(keys))
 	for i, key := range keys {
-		// WARNING: This is slow because each LoadThunk call can sleep
-		results[i] = l.LoadThunk(key)
+		thunks[i] = l.LoadThunk(key)
 	}
 	return func() ([]ValueT, []error) {
 		values := make([]ValueT, len(keys))
 		errors := make([]error, len(keys))
-		for i, thunk := range results {
+		for i, thunk := range thunks {
 			values[i], errors[i] = thunk()
 		}
 		return values, errors

@@ -203,13 +203,14 @@ func TestUserLoader(t *testing.T) {
 		require.Error(t, err)
 		require.Equal(t, "failed all fetches", err.Error())
 		require.Empty(t, user)
+		require.Len(t, fetches, 6)
 	})
 
 	t.Run("LoadAll does a single fetch", func(t *testing.T) {
-		t.Skip("failing!")
 		dl.Clear("U1")
+		dl.Clear("F1")
 		users, errs := dl.LoadAll([]string{"F1", "U1"})
-		require.Len(t, fetches, 6)
+		require.Len(t, fetches, 7)
 		for _, user := range users {
 			require.Empty(t, user)
 		}
