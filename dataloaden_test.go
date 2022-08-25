@@ -197,14 +197,9 @@ func TestUserLoader(t *testing.T) {
 	})
 
 	t.Run("single error return value works", func(t *testing.T) {
-		users, errs := dl.LoadAll([]string{"F1", "U1"})
-		for _, user := range users {
-			require.Empty(t, user)
-		}
-		require.Len(t, errs, 2)
-		require.Error(t, errs[0])
-		require.Equal(t, "failed all fetches", errs[0].Error())
-		require.Error(t, errs[1])
-		require.Equal(t, "failed all fetches", errs[1].Error())
+		user, err := dl.Load("F1")
+		require.Error(t, err)
+		require.Equal(t, "failed all fetches", err.Error())
+		require.Empty(t, user)
 	})
 }

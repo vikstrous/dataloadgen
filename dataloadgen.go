@@ -102,7 +102,8 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 
 		var data ValueT
 
-		if len(batch.error) == 1 {
+		// Return early if there's a single error and it's not nil
+		if len(batch.error) == 1 && batch.error[0] != nil {
 			return data, batch.error[0]
 		}
 
