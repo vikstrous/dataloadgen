@@ -102,6 +102,10 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 
 		var data ValueT
 
+		if len(batch.error) == 1 {
+			return data, batch.error[0]
+		}
+
 		// If the batch function returned the wrong number of responses, return an error to all callers
 		if len(batch.data) != len(batch.keys) {
 			return data, fmt.Errorf("bug in loader: %d values returned for %d keys", len(batch.data), len(batch.keys))
@@ -113,9 +117,7 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 
 		var err error
 		// its convenient to be able to return a single error for everything
-		if len(batch.error) == 1 {
-			err = batch.error[0]
-		} else if batch.error != nil {
+		if batch.error != nil {
 			err = batch.error[pos]
 		}
 
@@ -131,6 +133,7 @@ func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
 	results := make([]func() (ValueT, error), len(keys))
 
 	for i, key := range keys {
+		// WARNING: This is slow because each LoadThunk call can sleep
 		results[i] = l.LoadThunk(key)
 	}
 
@@ -155,6 +158,7 @@ func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
 func (l *Loader[KeyT, ValueT]) LoadAllThunk(keys []KeyT) func() ([]ValueT, []error) {
 	results := make([]func() (ValueT, error), len(keys))
 	for i, key := range keys {
+		// WARNING: This is slow because each LoadThunk call can sleep
 		results[i] = l.LoadThunk(key)
 	}
 	return func() ([]ValueT, []error) {

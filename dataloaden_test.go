@@ -24,6 +24,9 @@ func TestUserLoader(t *testing.T) {
 		errors := make([]error, len(keys))
 
 		for i, key := range keys {
+			if strings.HasPrefix(key, "F") {
+				return nil, []error{fmt.Errorf("failed all fetches")}
+			}
 			if strings.HasPrefix(key, "E") {
 				errors[i] = fmt.Errorf("user not found")
 			} else {
@@ -191,5 +194,17 @@ func TestUserLoader(t *testing.T) {
 		require.NoError(t, err2[0])
 		require.Error(t, err2[1])
 		require.Equal(t, "user U6", users2[0].Name)
+	})
+
+	t.Run("single error return value works", func(t *testing.T) {
+		users, errs := dl.LoadAll([]string{"F1", "U1"})
+		for _, user := range users {
+			require.Empty(t, user)
+		}
+		require.Len(t, errs, 2)
+		require.Error(t, errs[0])
+		require.Equal(t, "failed all fetches", errs[0].Error())
+		require.Error(t, errs[1])
+		require.Equal(t, "failed all fetches", errs[1].Error())
 	})
 }
