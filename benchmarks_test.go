@@ -91,6 +91,26 @@ func BenchmarkDataloader(b *testing.B) {
 		}
 		wg.Wait()
 	})
+
+	b.Run("10 per request", func(b *testing.B) {
+		queries := []dataloader.Keys{}
+		for n := 0; n < b.N; n++ {
+			keys := []dataloader.Key{}
+			for k := 0; k < 10; k++ {
+				keys = append(keys, IntKey(rand.Int()))
+			}
+			queries = append(queries, keys)
+		}
+		b.ResetTimer()
+		thunks := make([]func() ([]interface{}, []error), b.N)
+		for i := 0; i < b.N; i++ {
+			thunks[i] = dl.LoadMany(ctx, queries[i])
+		}
+
+		for i := 0; i < b.N; i++ {
+			thunks[i]()
+		}
+	})
 }
 
 // IntKey implements the Key interface for an int
@@ -172,6 +192,26 @@ func BenchmarkDataloadgen(b *testing.B) {
 		}
 		wg.Wait()
 	})
+
+	b.Run("10 per request", func(b *testing.B) {
+		queries := [][]int{}
+		for n := 0; n < b.N; n++ {
+			keys := []int{}
+			for k := 0; k < 10; k++ {
+				keys = append(keys, rand.Int())
+			}
+			queries = append(queries, keys)
+		}
+		b.ResetTimer()
+		thunks := make([]func() ([]benchmarkUser, []error), b.N)
+		for i := 0; i < b.N; i++ {
+			thunks[i] = dl.LoadAllThunk(queries[i])
+		}
+
+		for i := 0; i < b.N; i++ {
+			thunks[i]()
+		}
+	})
 }
 func BenchmarkDataloaden(b *testing.B) {
 	dl := NewUserLoader(UserLoaderConfig{
@@ -243,5 +283,25 @@ func BenchmarkDataloaden(b *testing.B) {
 			}(i)
 		}
 		wg.Wait()
+	})
+
+	b.Run("10 per request", func(b *testing.B) {
+		queries := [][]int{}
+		for n := 0; n < b.N; n++ {
+			keys := []int{}
+			for k := 0; k < 10; k++ {
+				keys = append(keys, rand.Int())
+			}
+			queries = append(queries, keys)
+		}
+		b.ResetTimer()
+		thunks := make([]func() ([]*example.User, []error), b.N)
+		for i := 0; i < b.N; i++ {
+			thunks[i] = dl.LoadAllThunk(queries[i])
+		}
+
+		for i := 0; i < b.N; i++ {
+			thunks[i]()
+		}
 	})
 }

@@ -117,7 +117,6 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 		}
 
 		var err error
-		// its convenient to be able to return a single error for everything
 		if batch.error != nil {
 			err = batch.error[pos]
 		}
