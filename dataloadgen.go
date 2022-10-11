@@ -1,9 +1,12 @@
 package dataloadgen
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
+
+	trace "go.opentelemetry.io/otel/trace"
 )
 
 // Option allows for configuration of loader fields.
@@ -24,8 +27,14 @@ func WithWait(d time.Duration) Option {
 	}
 }
 
+func WithTracer(tracer trace.Tracer) Option {
+	return func(l *loaderConfig) {
+		l.tracer = tracer
+	}
+}
+
 // NewLoader creates a new GenericLoader given a fetch, wait, and maxBatch
-func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, []error), options ...Option) *Loader[KeyT, ValueT] {
+func NewLoader[KeyT comparable, ValueT any](ctx context.Context, fetch func(keys []KeyT) ([]ValueT, []error), options ...Option) *Loader[KeyT, ValueT] {
 	config := &loaderConfig{
 		wait:     16 * time.Millisecond,
 		maxBatch: 0, //unlimited
@@ -34,6 +43,7 @@ func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, [
 		o(config)
 	}
 	l := &Loader[KeyT, ValueT]{
+		context:      ctx,
 		fetch:        fetch,
 		loaderConfig: config,
 		cache:        map[KeyT]func() (ValueT, error){},
@@ -47,6 +57,9 @@ type loaderConfig struct {
 
 	// this will limit the maximum number of keys to send in one batch, 0 = no limit
 	maxBatch int
+
+	// tracer FIXME: what if there's no tracer?
+	tracer trace.Tracer
 }
 
 // Loader batches and caches requests
@@ -67,6 +80,8 @@ type Loader[KeyT comparable, ValueT any] struct {
 
 	// mutex to prevent races
 	mu sync.Mutex
+
+	context context.Context
 }
 
 type loaderBatch[KeyT comparable, ValueT any] struct {
@@ -79,13 +94,15 @@ type loaderBatch[KeyT comparable, ValueT any] struct {
 
 // Load a ValueT by key, batching and caching will be applied automatically
 func (l *Loader[KeyT, ValueT]) Load(key KeyT) (ValueT, error) {
-	return l.LoadThunk(key)()
+	ctx, span := l.tracer.Start(l.context, "load")
+	defer span.End()
+	return l.LoadThunk(ctx, key)()
 }
 
 // LoadThunk returns a function that when called will block waiting for a ValueT.
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
-func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
+func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (ValueT, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if it, ok := l.cache[key]; ok {
@@ -95,7 +112,7 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 		l.batch = &loaderBatch[KeyT, ValueT]{done: make(chan struct{})}
 	}
 	batch := l.batch
-	pos := batch.keyIndex(l, key)
+	pos := batch.keyIndex(ctx, l, key)
 
 	thunk := func() (ValueT, error) {
 		<-batch.done
@@ -129,11 +146,11 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 
 // LoadAll fetches many keys at once. It will be broken into appropriate sized
 // sub batches depending on how the loader is configured
-func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
+func (l *Loader[KeyT, ValueT]) LoadAll(ctx context.Context, keys []KeyT) ([]ValueT, []error) {
 	thunks := make([]func() (ValueT, error), len(keys))
 
 	for i, key := range keys {
-		thunks[i] = l.LoadThunk(key)
+		thunks[i] = l.LoadThunk(ctx, key)
 	}
 
 	values := make([]ValueT, len(keys))
@@ -154,10 +171,10 @@ func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
 // LoadAllThunk returns a function that when called will block waiting for a ValueT.
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
-func (l *Loader[KeyT, ValueT]) LoadAllThunk(keys []KeyT) func() ([]ValueT, []error) {
+func (l *Loader[KeyT, ValueT]) LoadAllThunk(ctx context.Context, keys []KeyT) func() ([]ValueT, []error) {
 	thunks := make([]func() (ValueT, error), len(keys))
 	for i, key := range keys {
-		thunks[i] = l.LoadThunk(key)
+		thunks[i] = l.LoadThunk(ctx, key)
 	}
 	return func() ([]ValueT, []error) {
 		values := make([]ValueT, len(keys))
@@ -191,7 +208,7 @@ func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 
 // keyIndex will return the location of the key in the batch, if its not found
 // it will add the key to the batch
-func (b *loaderBatch[KeyT, ValueT]) keyIndex(l *Loader[KeyT, ValueT], key KeyT) int {
+func (b *loaderBatch[KeyT, ValueT]) keyIndex(ctx context.Context, l *Loader[KeyT, ValueT], key KeyT) int {
 	for i, existingKey := range b.keys {
 		if key == existingKey {
 			return i
@@ -202,7 +219,9 @@ func (b *loaderBatch[KeyT, ValueT]) keyIndex(l *Loader[KeyT, ValueT], key KeyT) 
 	b.keys = append(b.keys, key)
 	if pos == 0 {
 		go func(l *Loader[KeyT, ValueT]) {
+			_, sleepSpan := l.tracer.Start(ctx, "sleep") // FIXME provide more specific names somehow
 			time.Sleep(l.wait)
+			sleepSpan.End()
 			l.mu.Lock()
 
 			// we must have hit a batch limit and are already finalizing this batch
@@ -214,7 +233,9 @@ func (b *loaderBatch[KeyT, ValueT]) keyIndex(l *Loader[KeyT, ValueT], key KeyT) 
 			l.batch = nil
 			l.mu.Unlock()
 
+			_, fetchSpan := l.tracer.Start(ctx, "fetch") // FIXME see above
 			b.data, b.error = l.fetch(b.keys)
+			fetchSpan.End()
 			close(b.done)
 		}(l)
 	}
