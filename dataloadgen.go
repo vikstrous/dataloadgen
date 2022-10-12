@@ -36,7 +36,7 @@ func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, [
 	l := &Loader[KeyT, ValueT]{
 		fetch:        fetch,
 		loaderConfig: config,
-		cache:        map[KeyT]func() (ValueT, error){},
+		thunkCache:   map[KeyT]func() (ValueT, error){},
 	}
 	return l
 }
@@ -58,8 +58,8 @@ type Loader[KeyT comparable, ValueT any] struct {
 
 	// INTERNAL
 
-	// lazily created cache
-	cache map[KeyT]func() (ValueT, error)
+	// lazily created thunkCache
+	thunkCache map[KeyT]func() (ValueT, error)
 
 	// the current batch. keys will continue to be collected until timeout is hit,
 	// then everything will be sent to the fetch method and out to the listeners
@@ -70,11 +70,11 @@ type Loader[KeyT comparable, ValueT any] struct {
 }
 
 type loaderBatch[KeyT comparable, ValueT any] struct {
-	keys    []KeyT
-	data    []ValueT
-	error   []error
-	closing bool
-	done    chan struct{}
+	keys          []KeyT
+	results       []ValueT
+	errors        []error
+	fetchExecuted bool
+	done          chan struct{}
 }
 
 // Load a ValueT by key, batching and caching will be applied automatically
@@ -88,14 +88,12 @@ func (l *Loader[KeyT, ValueT]) Load(key KeyT) (ValueT, error) {
 func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if it, ok := l.cache[key]; ok {
+	if it, ok := l.thunkCache[key]; ok {
 		return it
 	}
-	if l.batch == nil {
-		l.batch = &loaderBatch[KeyT, ValueT]{done: make(chan struct{})}
-	}
+	l.startBatch()
 	batch := l.batch
-	pos := batch.keyIndex(l, key)
+	pos := l.addKeyToBatch(batch, key)
 
 	thunk := func() (ValueT, error) {
 		<-batch.done
@@ -103,27 +101,27 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 		var data ValueT
 
 		// Return early if there's a single error and it's not nil
-		if len(batch.error) == 1 && batch.error[0] != nil {
-			return data, batch.error[0]
+		if len(batch.errors) == 1 && batch.errors[0] != nil {
+			return data, batch.errors[0]
 		}
 
 		// If the batch function returned the wrong number of responses, return an error to all callers
-		if len(batch.data) != len(batch.keys) {
-			return data, fmt.Errorf("bug in loader: %d values returned for %d keys", len(batch.data), len(batch.keys))
+		if len(batch.results) != len(batch.keys) {
+			return data, fmt.Errorf("bug in loader: %d values returned for %d keys", len(batch.results), len(batch.keys))
 		}
 
-		if pos < len(batch.data) {
-			data = batch.data[pos]
+		if pos < len(batch.results) {
+			data = batch.results[pos]
 		}
 
 		var err error
-		if batch.error != nil {
-			err = batch.error[pos]
+		if batch.errors != nil {
+			err = batch.errors[pos]
 		}
 
 		return data, err
 	}
-	l.cache[key] = thunk
+	l.thunkCache[key] = thunk
 	return thunk
 }
 
@@ -175,8 +173,8 @@ func (l *Loader[KeyT, ValueT]) LoadAllThunk(keys []KeyT) func() ([]ValueT, []err
 func (l *Loader[KeyT, ValueT]) Prime(key KeyT, value ValueT) bool {
 	l.mu.Lock()
 	var found bool
-	if _, found = l.cache[key]; !found {
-		l.cache[key] = func() (ValueT, error) { return value, nil }
+	if _, found = l.thunkCache[key]; !found {
+		l.thunkCache[key] = func() (ValueT, error) { return value, nil }
 	}
 	l.mu.Unlock()
 	return !found
@@ -185,28 +183,20 @@ func (l *Loader[KeyT, ValueT]) Prime(key KeyT, value ValueT) bool {
 // Clear the value at key from the cache, if it exists
 func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 	l.mu.Lock()
-	delete(l.cache, key)
+	delete(l.thunkCache, key)
 	l.mu.Unlock()
 }
 
-// keyIndex will return the location of the key in the batch, if its not found
-// it will add the key to the batch
-func (b *loaderBatch[KeyT, ValueT]) keyIndex(l *Loader[KeyT, ValueT], key KeyT) int {
-	for i, existingKey := range b.keys {
-		if key == existingKey {
-			return i
-		}
-	}
-
-	pos := len(b.keys)
-	b.keys = append(b.keys, key)
-	if pos == 0 {
+func (l *Loader[KeyT, ValueT]) startBatch() {
+	if l.batch == nil {
+		batch := &loaderBatch[KeyT, ValueT]{done: make(chan struct{})}
+		l.batch = batch
 		go func(l *Loader[KeyT, ValueT]) {
 			time.Sleep(l.wait)
 			l.mu.Lock()
 
 			// we must have hit a batch limit and are already finalizing this batch
-			if b.closing {
+			if batch.fetchExecuted {
 				l.mu.Unlock()
 				return
 			}
@@ -214,20 +204,25 @@ func (b *loaderBatch[KeyT, ValueT]) keyIndex(l *Loader[KeyT, ValueT], key KeyT) 
 			l.batch = nil
 			l.mu.Unlock()
 
-			b.data, b.error = l.fetch(b.keys)
-			close(b.done)
+			batch.results, batch.errors = l.fetch(batch.keys)
+			close(batch.done)
 		}(l)
 	}
+}
+
+// addKeyToBatch will return the location of the key in the batch, if its not found
+// it will add the key to the batch
+func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key KeyT) int {
+	pos := len(b.keys)
+	b.keys = append(b.keys, key)
 
 	if l.maxBatch != 0 && pos >= l.maxBatch-1 {
-		if !b.closing {
-			b.closing = true
-			l.batch = nil
-			go func(l *Loader[KeyT, ValueT]) {
-				b.data, b.error = l.fetch(b.keys)
-				close(b.done)
-			}(l)
-		}
+		b.fetchExecuted = true
+		l.batch = nil
+		go func(l *Loader[KeyT, ValueT]) {
+			b.results, b.errors = l.fetch(b.keys)
+			close(b.done)
+		}(l)
 	}
 
 	return pos
