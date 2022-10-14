@@ -91,8 +91,6 @@ type loaderBatch[KeyT comparable, ValueT any] struct {
 
 // Load a ValueT by key, batching and caching will be applied automatically
 func (l *Loader[KeyT, ValueT]) Load(ctx context.Context, key KeyT) (ValueT, error) {
-	loadContext, span := l.tracer.Start(ctx, "LOAD")
-	defer span.End()
 	return l.LoadThunk(loadContext, key)()
 }
 
@@ -100,6 +98,8 @@ func (l *Loader[KeyT, ValueT]) Load(ctx context.Context, key KeyT) (ValueT, erro
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
 func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (ValueT, error) {
+	loadContext, span := l.tracer.Start(ctx, "LOAD")
+	defer span.End()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if it, ok := l.thunkCache[key]; ok {
