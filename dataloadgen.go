@@ -107,7 +107,7 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 	}
 
 	if l.batch == nil {
-		l.startBatch(ctx) // pre-emptively start goroutine that ends batch when time is hit
+		l.startBatch(ctx)
 	}
 
 	l.batch.contexts = append(l.batch.contexts, ctx)
