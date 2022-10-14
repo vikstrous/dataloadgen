@@ -112,7 +112,7 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 
 	l.batch.contexts = append(l.batch.contexts, ctx)
 	batch := l.batch
-	pos := l.addKeyToBatch(ctx, batch, key)
+	pos := l.addKeyToBatch(batch, key)
 
 	thunk := func() (ValueT, error) {
 		_, span := l.tracer.Start(ctx, "WAITING")
@@ -231,7 +231,6 @@ func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 				defer span.End()
 			}
 
-			fmt.Println("Fetching - time up")
 			batch.results, batch.errors = l.fetch(batch.keys)
 			close(batch.done)
 		}(l)
@@ -240,7 +239,7 @@ func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 
 // addKeyToBatch will return the location of the key in the batch, if its not found
 // it will add the key to the batch
-func (l *Loader[KeyT, ValueT]) addKeyToBatch(ctx context.Context, b *loaderBatch[KeyT, ValueT], key KeyT) int {
+func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key KeyT) int {
 	pos := len(b.keys)
 	b.keys = append(b.keys, key)
 
@@ -253,7 +252,6 @@ func (l *Loader[KeyT, ValueT]) addKeyToBatch(ctx context.Context, b *loaderBatch
 				_, span := l.tracer.Start(ctx, "FETCHFULL")
 				defer span.End()
 			}
-			fmt.Println("Fetching - full")
 			b.results, b.errors = l.fetch(b.keys)
 			close(b.done)
 		}(l, ctxs)
