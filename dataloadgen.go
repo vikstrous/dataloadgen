@@ -1,9 +1,12 @@
 package dataloadgen
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
+
+	trace "go.opentelemetry.io/otel/trace"
 )
 
 // Option allows for configuration of loader fields.
@@ -21,6 +24,12 @@ func WithBatchCapacity(c int) Option {
 func WithWait(d time.Duration) Option {
 	return func(l *loaderConfig) {
 		l.wait = d
+	}
+}
+
+func WithTracer(tracer trace.Tracer) Option {
+	return func(l *loaderConfig) {
+		l.tracer = tracer
 	}
 }
 
@@ -47,6 +56,8 @@ type loaderConfig struct {
 
 	// this will limit the maximum number of keys to send in one batch, 0 = no limit
 	maxBatch int
+
+	tracer trace.Tracer
 }
 
 // Loader batches and caches requests
@@ -75,28 +86,36 @@ type loaderBatch[KeyT comparable, ValueT any] struct {
 	errors        []error
 	fetchExecuted bool
 	done          chan struct{}
+	contexts      []context.Context
 }
 
 // Load a ValueT by key, batching and caching will be applied automatically
-func (l *Loader[KeyT, ValueT]) Load(key KeyT) (ValueT, error) {
-	return l.LoadThunk(key)()
+func (l *Loader[KeyT, ValueT]) Load(ctx context.Context, key KeyT) (ValueT, error) {
+	return l.LoadThunk(loadContext, key)()
 }
 
 // LoadThunk returns a function that when called will block waiting for a ValueT.
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
-func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
+func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (ValueT, error) {
+	loadContext, span := l.tracer.Start(ctx, "dataloadgen.load")
+	defer span.End()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if it, ok := l.thunkCache[key]; ok {
 		return it
 	}
-	l.startBatch()
+
+    l.startBatch(ctx)
+
+	l.batch.contexts = append(l.batch.contexts, ctx)
 	batch := l.batch
 	pos := l.addKeyToBatch(batch, key)
 
 	thunk := func() (ValueT, error) {
+		_, span := l.tracer.Start(ctx, "dataloadgen.wait")
 		<-batch.done
+		span.End()
 
 		var data ValueT
 
@@ -127,11 +146,11 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(key KeyT) func() (ValueT, error) {
 
 // LoadAll fetches many keys at once. It will be broken into appropriate sized
 // sub batches depending on how the loader is configured
-func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
+func (l *Loader[KeyT, ValueT]) LoadAll(ctx context.Context, keys []KeyT) ([]ValueT, []error) {
 	thunks := make([]func() (ValueT, error), len(keys))
 
 	for i, key := range keys {
-		thunks[i] = l.LoadThunk(key)
+		thunks[i] = l.LoadThunk(ctx, key)
 	}
 
 	values := make([]ValueT, len(keys))
@@ -152,10 +171,10 @@ func (l *Loader[KeyT, ValueT]) LoadAll(keys []KeyT) ([]ValueT, []error) {
 // LoadAllThunk returns a function that when called will block waiting for a ValueT.
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
-func (l *Loader[KeyT, ValueT]) LoadAllThunk(keys []KeyT) func() ([]ValueT, []error) {
+func (l *Loader[KeyT, ValueT]) LoadAllThunk(ctx context.Context, keys []KeyT) func() ([]ValueT, []error) {
 	thunks := make([]func() (ValueT, error), len(keys))
 	for i, key := range keys {
-		thunks[i] = l.LoadThunk(key)
+		thunks[i] = l.LoadThunk(ctx, key)
 	}
 	return func() ([]ValueT, []error) {
 		values := make([]ValueT, len(keys))
@@ -187,7 +206,7 @@ func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 	l.mu.Unlock()
 }
 
-func (l *Loader[KeyT, ValueT]) startBatch() {
+func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 	if l.batch == nil {
 		batch := &loaderBatch[KeyT, ValueT]{done: make(chan struct{})}
 		l.batch = batch
@@ -201,8 +220,14 @@ func (l *Loader[KeyT, ValueT]) startBatch() {
 				return
 			}
 
+			ctxs := l.batch.contexts
 			l.batch = nil
 			l.mu.Unlock()
+
+			for _, ctx := range ctxs {
+				_, span := l.tracer.Start(ctx, "dataloadgen.fetch.timelimit")
+				defer span.End()
+			}
 
 			batch.results, batch.errors = l.fetch(batch.keys)
 			close(batch.done)
@@ -217,12 +242,17 @@ func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key K
 	b.keys = append(b.keys, key)
 
 	if l.maxBatch != 0 && pos >= l.maxBatch-1 {
+		ctxs := l.batch.contexts
 		b.fetchExecuted = true
 		l.batch = nil
-		go func(l *Loader[KeyT, ValueT]) {
+		go func(l *Loader[KeyT, ValueT], ctxs []context.Context) {
+			for _, ctx := range ctxs {
+				_, span := l.tracer.Start(ctx, "dataloadgen.fetch.keylimit")
+				defer span.End()
+			}
 			b.results, b.errors = l.fetch(b.keys)
 			close(b.done)
-		}(l)
+		}(l, ctxs)
 	}
 
 	return pos
