@@ -1,6 +1,7 @@
 package dataloadgen_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 )
 
 func TestUserLoader(t *testing.T) {
+	ctx := context.Background()
 	var fetches [][]string
 	var mu sync.Mutex
 	dl := dataloadgen.NewLoader(func(keys []string) ([]*benchmarkUser, []error) {
@@ -42,21 +44,21 @@ func TestUserLoader(t *testing.T) {
 	t.Run("fetch concurrent data", func(t *testing.T) {
 		t.Run("load user successfully", func(t *testing.T) {
 			t.Parallel()
-			u, err := dl.Load("U1")
+			u, err := dl.Load(ctx, "U1")
 			require.NoError(t, err)
 			require.Equal(t, u.ID, "U1")
 		})
 
 		t.Run("load failed user", func(t *testing.T) {
 			t.Parallel()
-			u, err := dl.Load("E1")
+			u, err := dl.Load(ctx, "E1")
 			require.Error(t, err)
 			require.Nil(t, u)
 		})
 
 		t.Run("load many users", func(t *testing.T) {
 			t.Parallel()
-			u, err := dl.LoadAll([]string{"U2", "E2", "E3", "U4"})
+			u, err := dl.LoadAll(ctx, []string{"U2", "E2", "E3", "U4"})
 			require.Equal(t, u[0].Name, "user U2")
 			require.Equal(t, u[3].Name, "user U4")
 			require.Error(t, err[1])
@@ -65,8 +67,8 @@ func TestUserLoader(t *testing.T) {
 
 		t.Run("load thunk", func(t *testing.T) {
 			t.Parallel()
-			thunk1 := dl.LoadThunk("U5")
-			thunk2 := dl.LoadThunk("E5")
+			thunk1 := dl.LoadThunk(ctx, "U5")
+			thunk2 := dl.LoadThunk(ctx, "E5")
 
 			u1, err1 := thunk1()
 			require.NoError(t, err1)
@@ -91,14 +93,14 @@ func TestUserLoader(t *testing.T) {
 
 		t.Run("previously cached", func(t *testing.T) {
 			t.Parallel()
-			u, err := dl.Load("U1")
+			u, err := dl.Load(ctx, "U1")
 			require.NoError(t, err)
 			require.Equal(t, u.ID, "U1")
 		})
 
 		t.Run("load many users", func(t *testing.T) {
 			t.Parallel()
-			u, err := dl.LoadAll([]string{"U2", "U4"})
+			u, err := dl.LoadAll(ctx, []string{"U2", "U4"})
 			require.Len(t, err, 0)
 			require.Equal(t, u[0].Name, "user U2")
 			require.Equal(t, u[1].Name, "user U4")
@@ -115,14 +117,14 @@ func TestUserLoader(t *testing.T) {
 	t.Run("fetch partial", func(t *testing.T) {
 		t.Run("errors not in cache cache value", func(t *testing.T) {
 			t.Parallel()
-			u, err := dl.Load("E2")
+			u, err := dl.Load(ctx, "E2")
 			require.Nil(t, u)
 			require.Error(t, err)
 		})
 
 		t.Run("load all", func(t *testing.T) {
 			t.Parallel()
-			u, err := dl.LoadAll([]string{"U1", "U4", "E1", "U9", "U5"})
+			u, err := dl.LoadAll(ctx, []string{"U1", "U4", "E1", "U9", "U5"})
 			require.Equal(t, u[0].ID, "U1")
 			require.Equal(t, u[1].ID, "U4")
 			require.Error(t, err[2])
@@ -141,7 +143,7 @@ func TestUserLoader(t *testing.T) {
 
 	t.Run("primed reads dont hit the fetcher", func(t *testing.T) {
 		dl.Prime("U99", &benchmarkUser{ID: "U99", Name: "Primed user"})
-		u, err := dl.Load("U99")
+		u, err := dl.Load(ctx, "U99")
 		require.NoError(t, err)
 		require.Equal(t, "Primed user", u.Name)
 
@@ -158,11 +160,11 @@ func TestUserLoader(t *testing.T) {
 			dl.Prime(user.ID, &user)
 		}
 
-		u, err := dl.Load("Alpha")
+		u, err := dl.Load(ctx, "Alpha")
 		require.NoError(t, err)
 		require.Equal(t, "Alpha", u.Name)
 
-		u, err = dl.Load("Omega")
+		u, err = dl.Load(ctx, "Omega")
 		require.NoError(t, err)
 		require.Equal(t, "Omega", u.Name)
 
@@ -171,7 +173,7 @@ func TestUserLoader(t *testing.T) {
 
 	t.Run("cleared results will go back to the fetcher", func(t *testing.T) {
 		dl.Clear("U99")
-		u, err := dl.Load("U99")
+		u, err := dl.Load(ctx, "U99")
 		require.NoError(t, err)
 		require.Equal(t, "user U99", u.Name)
 
@@ -179,8 +181,8 @@ func TestUserLoader(t *testing.T) {
 	})
 
 	t.Run("load all thunk", func(t *testing.T) {
-		thunk1 := dl.LoadAllThunk([]string{"U5", "U6"})
-		thunk2 := dl.LoadAllThunk([]string{"U6", "E6"})
+		thunk1 := dl.LoadAllThunk(ctx, []string{"U5", "U6"})
+		thunk2 := dl.LoadAllThunk(ctx, []string{"U6", "E6"})
 
 		users1, err1 := thunk1()
 		require.Len(t, fetches, 5)
@@ -199,7 +201,7 @@ func TestUserLoader(t *testing.T) {
 	})
 
 	t.Run("single error return value works", func(t *testing.T) {
-		user, err := dl.Load("F1")
+		user, err := dl.Load(ctx, "F1")
 		require.Error(t, err)
 		require.Equal(t, "failed all fetches", err.Error())
 		require.Empty(t, user)
@@ -209,7 +211,7 @@ func TestUserLoader(t *testing.T) {
 	t.Run("LoadAll does a single fetch", func(t *testing.T) {
 		dl.Clear("U1")
 		dl.Clear("F1")
-		users, errs := dl.LoadAll([]string{"F1", "U1"})
+		users, errs := dl.LoadAll(ctx, []string{"F1", "U1"})
 		require.Len(t, fetches, 7)
 		for _, user := range users {
 			require.Empty(t, user)
