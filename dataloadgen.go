@@ -87,6 +87,7 @@ type loaderBatch[KeyT comparable, ValueT any] struct {
 	fetchExecuted bool
 	done          chan struct{}
 	contexts      []context.Context
+	spans         []trace.Span
 }
 
 // Load a ValueT by key, batching and caching will be applied automatically
@@ -104,19 +105,21 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 		return it
 	}
 
-	loadContext, span := l.tracer.Start(ctx, "dataloadgen.load")
-	defer span.End()
+	_, loadSpan := l.tracer.Start(ctx, "dataloadgen.load")
+	defer loadSpan.End()
 
 	l.startBatch()
 
 	l.batch.contexts = append(l.batch.contexts, ctx)
+
+	_, waitSpan := l.tracer.Start(ctx, "dataloadgen.wait")
+	l.batch.spans = append(l.batch.spans, waitSpan)
+
 	batch := l.batch
 	pos := l.addKeyToBatch(batch, key)
 
 	thunk := func() (ValueT, error) {
-		_, span := l.tracer.Start(ctx, "dataloadgen.wait")
 		<-batch.done
-		span.End()
 
 		var data ValueT
 
@@ -222,6 +225,8 @@ func (l *Loader[KeyT, ValueT]) startBatch() {
 			}
 
 			ctxs := l.batch.contexts
+			spans := l.batch.spans
+
 			l.batch = nil
 			l.mu.Unlock()
 
@@ -231,6 +236,11 @@ func (l *Loader[KeyT, ValueT]) startBatch() {
 			}
 
 			batch.results, batch.errors = l.fetch(batch.keys)
+
+			for _, span := range spans {
+				span.End()
+			}
+
 			close(batch.done)
 		}(l)
 	}
@@ -244,6 +254,7 @@ func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key K
 
 	if l.maxBatch != 0 && pos >= l.maxBatch-1 {
 		ctxs := l.batch.contexts
+		spans := l.batch.spans
 		b.fetchExecuted = true
 		l.batch = nil
 		go func(l *Loader[KeyT, ValueT], ctxs []context.Context) {
@@ -251,7 +262,13 @@ func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key K
 				_, span := l.tracer.Start(ctx, "dataloadgen.fetch.keylimit")
 				defer span.End()
 			}
+
 			b.results, b.errors = l.fetch(b.keys)
+
+			for _, span := range spans {
+				span.End()
+			}
+
 			close(b.done)
 		}(l, ctxs)
 	}
