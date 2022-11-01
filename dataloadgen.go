@@ -98,13 +98,14 @@ func (l *Loader[KeyT, ValueT]) Load(ctx context.Context, key KeyT) (ValueT, erro
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
 func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (ValueT, error) {
-	loadContext, span := l.tracer.Start(ctx, "dataloadgen.load")
-	defer span.End()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if it, ok := l.thunkCache[key]; ok {
 		return it
 	}
+
+	loadContext, span := l.tracer.Start(ctx, "dataloadgen.load")
+	defer span.End()
 
 	l.startBatch()
 
