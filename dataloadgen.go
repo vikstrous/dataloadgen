@@ -106,7 +106,7 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 		return it
 	}
 
-    l.startBatch(ctx)
+	l.startBatch()
 
 	l.batch.contexts = append(l.batch.contexts, ctx)
 	batch := l.batch
@@ -206,7 +206,7 @@ func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 	l.mu.Unlock()
 }
 
-func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
+func (l *Loader[KeyT, ValueT]) startBatch() {
 	if l.batch == nil {
 		batch := &loaderBatch[KeyT, ValueT]{done: make(chan struct{})}
 		l.batch = batch
