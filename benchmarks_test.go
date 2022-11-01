@@ -114,6 +114,7 @@ func (k IntKey) String() string { return strconv.Itoa(int(k)) }
 func (k IntKey) Raw() interface{} { return k }
 
 func BenchmarkDataloadgen(b *testing.B) {
+	ctx := context.Background()
 	dl := dataloadgen.NewLoader(func(keys []int) ([]benchmarkUser, []error) {
 		users := make([]benchmarkUser, len(keys))
 		errors := make([]error, len(keys))
@@ -141,7 +142,7 @@ func BenchmarkDataloadgen(b *testing.B) {
 		b.ResetTimer()
 		thunks := make([]func() (benchmarkUser, error), b.N)
 		for i := 0; i < b.N; i++ {
-			thunks[i] = dl.LoadThunk(queries[i])
+			thunks[i] = dl.LoadThunk(ctx, queries[i])
 		}
 
 		for i := 0; i < b.N; i++ {
@@ -157,7 +158,7 @@ func BenchmarkDataloadgen(b *testing.B) {
 		b.ResetTimer()
 		thunks := make([]func() (benchmarkUser, error), b.N)
 		for i := 0; i < b.N; i++ {
-			thunks[i] = dl.LoadThunk(queries[i])
+			thunks[i] = dl.LoadThunk(ctx, queries[i])
 		}
 
 		for i := 0; i < b.N; i++ {
@@ -176,7 +177,7 @@ func BenchmarkDataloadgen(b *testing.B) {
 			wg.Add(1)
 			go func(i int) {
 				for j := 0; j < b.N; j++ {
-					dl.Load(queries[j+i*b.N])
+					dl.Load(ctx, queries[j+i*b.N])
 				}
 				wg.Done()
 			}(i)
@@ -191,7 +192,7 @@ func BenchmarkDataloadgen(b *testing.B) {
 		}
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			dl.LoadAll(keys)
+			dl.LoadAll(ctx, keys)
 		}
 	})
 }

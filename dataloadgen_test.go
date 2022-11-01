@@ -1,6 +1,7 @@
 package dataloadgen_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -12,6 +13,7 @@ import (
 )
 
 func ExampleLoader() {
+	ctx := context.Background()
 	loader := dataloadgen.NewLoader(func(keys []string) (ret []int, errs []error) {
 		for _, key := range keys {
 			num, err := strconv.ParseInt(key, 10, 32)
@@ -23,7 +25,7 @@ func ExampleLoader() {
 		dataloadgen.WithBatchCapacity(1),
 		dataloadgen.WithWait(16*time.Millisecond),
 	)
-	one, err := loader.Load("1")
+	one, err := loader.Load(ctx, "1")
 	if err != nil {
 		panic(err)
 	}
@@ -32,6 +34,7 @@ func ExampleLoader() {
 }
 
 func TestEdgeCases(t *testing.T) {
+	ctx := context.Background()
 	var fetches [][]int
 	var mu sync.Mutex
 	dl := dataloadgen.NewLoader(func(keys []int) ([]string, []error) {
@@ -57,13 +60,13 @@ func TestEdgeCases(t *testing.T) {
 
 	t.Run("load function called only once when cached", func(t *testing.T) {
 		for i := 0; i < 2; i++ {
-			_, err := dl.Load(0)
+			_, err := dl.Load(ctx, 0)
 			require.Error(t, err)
 			require.Len(t, fetches, 1)
 			require.Len(t, fetches[0], 1)
 		}
 		for i := 0; i < 2; i++ {
-			r, err := dl.Load(1)
+			r, err := dl.Load(ctx, 1)
 			require.NoError(t, err)
 			require.Len(t, fetches, 2)
 			require.Len(t, fetches[1], 1)

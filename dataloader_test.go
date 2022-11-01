@@ -1,6 +1,7 @@
 package dataloadgen_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -14,6 +15,7 @@ import (
 // copied and adapted from github.com/graph-gophers/dataloader
 func BenchmarkLoaderFromDataloader(b *testing.B) {
 	var a = &Avg{}
+	ctx := context.Background()
 	dl := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
 		a.Add(len(keys))
 		results = make([]string, 0, len(keys))
@@ -24,7 +26,7 @@ func BenchmarkLoaderFromDataloader(b *testing.B) {
 	})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		dl.LoadThunk(strconv.Itoa(i))
+		dl.LoadThunk(ctx, strconv.Itoa(i))
 	}
 	b.Logf("avg: %f", a.Avg())
 }
@@ -54,10 +56,11 @@ func (a *Avg) Avg() float64 {
 }
 
 func TestLoader(t *testing.T) {
+	ctx := context.Background()
 	t.Run("test Load method", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
-		value, err := identityLoader.Load("1")
+		value, err := identityLoader.Load(ctx, "1")
 		if err != nil {
 			t.Error(err.Error())
 		}
@@ -69,7 +72,7 @@ func TestLoader(t *testing.T) {
 	t.Run("test thunk does not contain race conditions", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
-		future := identityLoader.LoadThunk("1")
+		future := identityLoader.LoadThunk(ctx, "1")
 		go future()
 		go future()
 	})
@@ -84,7 +87,7 @@ func TestLoader(t *testing.T) {
 			}
 		}()
 		panicLoader, _ := PanicLoader(0)
-		_, err := panicLoader.Load("1")
+		_, err := panicLoader.Load(ctx, "1")
 		if err == nil || err.Error() != "Panic received in batch function: Programming error" {
 			t.Error("Panic was not propagated as an error.")
 		}
@@ -102,7 +105,7 @@ func TestLoader(t *testing.T) {
 		panicLoader, _ := PanicLoader(0)
 		futures := []func() (string, error){}
 		for i := 0; i < 3; i++ {
-			futures = append(futures, panicLoader.LoadThunk(strconv.Itoa(i)))
+			futures = append(futures, panicLoader.LoadThunk(ctx, strconv.Itoa(i)))
 		}
 		for _, f := range futures {
 			_, err := f()
@@ -115,7 +118,7 @@ func TestLoader(t *testing.T) {
 	t.Run("test LoadAll returns errors", func(t *testing.T) {
 		t.Parallel()
 		errorLoader, _ := ErrorLoader(0)
-		_, err := errorLoader.LoadAll([]string{"1", "2", "3"})
+		_, err := errorLoader.LoadAll(ctx, []string{"1", "2", "3"})
 		if len(err) != 3 {
 			t.Error("LoadAll didn't return right number of errors")
 		}
@@ -124,7 +127,7 @@ func TestLoader(t *testing.T) {
 	t.Run("test LoadAll returns len(errors) == len(keys)", func(t *testing.T) {
 		t.Parallel()
 		loader, _ := OneErrorLoader(3)
-		_, errs := loader.LoadAll([]string{"1", "2", "3"})
+		_, errs := loader.LoadAll(ctx, []string{"1", "2", "3"})
 		if len(errs) != 3 {
 			t.Errorf("LoadAll didn't return right number of errors (should match size of input)")
 		}
@@ -150,16 +153,16 @@ func TestLoader(t *testing.T) {
 	t.Run("test LoadAll returns nil []error when no errors occurred", func(t *testing.T) {
 		t.Parallel()
 		loader, _ := IDLoader(0)
-		_, errs := loader.LoadAll([]string{"1", "2", "3"})
+		_, errs := loader.LoadAll(ctx, []string{"1", "2", "3"})
 		if errs != nil {
-			t.Errorf("Expected LoadAll() to return nil error slice when no errors occurred")
+			t.Errorf("Expected LoadAll(ctx,) to return nil error slice when no errors occurred")
 		}
 	})
 
 	t.Run("test thunkmany does not contain race conditions", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
-		future := identityLoader.LoadAllThunk([]string{"1", "2", "3"})
+		future := identityLoader.LoadAllThunk(ctx, []string{"1", "2", "3"})
 		go future()
 		go future()
 	})
@@ -174,7 +177,7 @@ func TestLoader(t *testing.T) {
 			}
 		}()
 		panicLoader, _ := PanicLoader(0)
-		_, errs := panicLoader.LoadAll([]string{"1"})
+		_, errs := panicLoader.LoadAll(ctx, []string{"1"})
 		if len(errs) < 1 || errs[0].Error() != "Panic received in batch function: Programming error" {
 			t.Error("Panic was not propagated as an error.")
 		}
@@ -183,7 +186,7 @@ func TestLoader(t *testing.T) {
 	t.Run("test LoadAll method", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, _ := IDLoader(0)
-		results, _ := identityLoader.LoadAll([]string{"1", "2", "3"})
+		results, _ := identityLoader.LoadAll(ctx, []string{"1", "2", "3"})
 		if results[0] != "1" || results[1] != "2" || results[2] != "3" {
 			t.Error("LoadAll didn't return the right value")
 		}
@@ -192,8 +195,8 @@ func TestLoader(t *testing.T) {
 	t.Run("batches many requests", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
-		future1 := identityLoader.LoadThunk("1")
-		future2 := identityLoader.LoadThunk("2")
+		future1 := identityLoader.LoadThunk(ctx, "1")
+		future2 := identityLoader.LoadThunk(ctx, "2")
 
 		_, err := future1()
 		if err != nil {
@@ -221,7 +224,7 @@ func TestLoader(t *testing.T) {
 		keys := []string{}
 		for i := 0; i < n; i++ {
 			key := strconv.Itoa(i)
-			reqs = append(reqs, faultyLoader.LoadThunk(key))
+			reqs = append(reqs, faultyLoader.LoadThunk(ctx, key))
 			keys = append(keys, key)
 		}
 
@@ -236,9 +239,9 @@ func TestLoader(t *testing.T) {
 	t.Run("responds to max batch size", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(2)
-		future1 := identityLoader.LoadThunk("1")
-		future2 := identityLoader.LoadThunk("2")
-		future3 := identityLoader.LoadThunk("3")
+		future1 := identityLoader.LoadThunk(ctx, "1")
+		future2 := identityLoader.LoadThunk(ctx, "2")
+		future3 := identityLoader.LoadThunk(ctx, "3")
 
 		_, err := future1()
 		if err != nil {
@@ -265,8 +268,8 @@ func TestLoader(t *testing.T) {
 	t.Run("caches repeated requests", func(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
-		future1 := identityLoader.LoadThunk("1")
-		future2 := identityLoader.LoadThunk("1")
+		future1 := identityLoader.LoadThunk(ctx, "1")
+		future2 := identityLoader.LoadThunk(ctx, "1")
 
 		_, err := future1()
 		if err != nil {
@@ -289,8 +292,8 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
-		future1 := identityLoader.LoadThunk("1")
-		future2 := identityLoader.LoadThunk("A")
+		future1 := identityLoader.LoadThunk(ctx, "1")
+		future2 := identityLoader.LoadThunk(ctx, "A")
 
 		_, err := future1()
 		if err != nil {
@@ -318,10 +321,10 @@ func TestLoader(t *testing.T) {
 		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
-		future1 := identityLoader.LoadThunk("1")
+		future1 := identityLoader.LoadThunk(ctx, "1")
 		identityLoader.Clear("A")
-		future2 := identityLoader.LoadThunk("A")
-		future3 := identityLoader.LoadThunk("B")
+		future2 := identityLoader.LoadThunk(ctx, "A")
+		future3 := identityLoader.LoadThunk(ctx, "B")
 
 		_, err := future1()
 		if err != nil {
@@ -352,8 +355,8 @@ func TestLoader(t *testing.T) {
 		t.Skip("not supported yet")
 		t.Parallel()
 		batchOnlyLoader, loadCalls := BatchOnlyLoader(0)
-		future1 := batchOnlyLoader.LoadThunk("1")
-		future2 := batchOnlyLoader.LoadThunk("1")
+		future1 := batchOnlyLoader.LoadThunk(ctx, "1")
+		future2 := batchOnlyLoader.LoadThunk(ctx, "1")
 
 		_, err := future1()
 		if err != nil {
@@ -385,9 +388,9 @@ func TestLoader(t *testing.T) {
 
 		// identityLoader.ClearAll()
 
-		future1 := identityLoader.LoadThunk("1")
-		future2 := identityLoader.LoadThunk("A")
-		future3 := identityLoader.LoadThunk("B")
+		future1 := identityLoader.LoadThunk(ctx, "1")
+		future2 := identityLoader.LoadThunk(ctx, "A")
+		future3 := identityLoader.LoadThunk(ctx, "B")
 
 		_, err := future1()
 		if err != nil {
@@ -420,9 +423,9 @@ func TestLoader(t *testing.T) {
 		// identityLoader.ClearAll()
 
 		identityLoader.Clear("1")
-		future1 := identityLoader.LoadThunk("1")
-		future2 := identityLoader.LoadThunk("A")
-		future3 := identityLoader.LoadThunk("B")
+		future1 := identityLoader.LoadThunk(ctx, "1")
+		future2 := identityLoader.LoadThunk(ctx, "A")
+		future3 := identityLoader.LoadThunk(ctx, "B")
 
 		_, err := future1()
 		if err != nil {
@@ -452,9 +455,9 @@ func TestLoader(t *testing.T) {
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
 
-		future1 := identityLoader.LoadThunk("1")
-		future2 := identityLoader.LoadThunk("A")
-		future3 := identityLoader.LoadThunk("B")
+		future1 := identityLoader.LoadThunk(ctx, "1")
+		future2 := identityLoader.LoadThunk(ctx, "A")
+		future3 := identityLoader.LoadThunk(ctx, "B")
 
 		_, err := future1()
 		if err != nil {

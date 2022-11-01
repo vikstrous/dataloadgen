@@ -91,7 +91,7 @@ type loaderBatch[KeyT comparable, ValueT any] struct {
 
 // Load a ValueT by key, batching and caching will be applied automatically
 func (l *Loader[KeyT, ValueT]) Load(ctx context.Context, key KeyT) (ValueT, error) {
-	return l.LoadThunk(loadContext, key)()
+	return l.LoadThunk(ctx, key)()
 }
 
 // LoadThunk returns a function that when called will block waiting for a ValueT.
