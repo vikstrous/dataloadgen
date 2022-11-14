@@ -87,6 +87,7 @@ type loaderBatch[KeyT comparable, ValueT any] struct {
 	fetchExecuted bool
 	done          chan struct{}
 	contexts      []context.Context
+	spans         []trace.Span
 }
 
 // Load a ValueT by key, batching and caching will be applied automatically
@@ -98,24 +99,27 @@ func (l *Loader[KeyT, ValueT]) Load(ctx context.Context, key KeyT) (ValueT, erro
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
 func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (ValueT, error) {
-	ctx, span := l.tracer.Start(ctx, "dataloadgen.load")
-	defer span.End()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if it, ok := l.thunkCache[key]; ok {
 		return it
 	}
 
-	l.startBatch(ctx)
+	l.startBatch()
 
-	l.batch.contexts = append(l.batch.contexts, ctx)
+	if l.tracer != nil {
+		_, loadSpan := l.tracer.Start(ctx, "dataloadgen.load")
+		defer loadSpan.End()
+		l.batch.contexts = append(l.batch.contexts, ctx)
+		_, waitSpan := l.tracer.Start(ctx, "dataloadgen.wait")
+		l.batch.spans = append(l.batch.spans, waitSpan)
+	}
+
 	batch := l.batch
 	pos := l.addKeyToBatch(batch, key)
 
 	thunk := func() (ValueT, error) {
-		_, span := l.tracer.Start(ctx, "dataloadgen.wait")
 		<-batch.done
-		span.End()
 
 		var data ValueT
 
@@ -206,7 +210,7 @@ func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 	l.mu.Unlock()
 }
 
-func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
+func (l *Loader[KeyT, ValueT]) startBatch() {
 	if l.batch == nil {
 		batch := &loaderBatch[KeyT, ValueT]{done: make(chan struct{})}
 		l.batch = batch
@@ -221,15 +225,26 @@ func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 			}
 
 			ctxs := l.batch.contexts
+			spans := l.batch.spans
+
 			l.batch = nil
 			l.mu.Unlock()
 
-			for _, ctx := range ctxs {
-				_, span := l.tracer.Start(ctx, "dataloadgen.fetch.timelimit")
-				defer span.End()
+			if l.tracer != nil {
+				for _, ctx := range ctxs {
+					_, span := l.tracer.Start(ctx, "dataloadgen.fetch.timelimit")
+					defer span.End()
+				}
 			}
 
 			batch.results, batch.errors = l.fetch(batch.keys)
+
+			if l.tracer != nil {
+				for _, span := range spans {
+					span.End()
+				}
+			}
+
 			close(batch.done)
 		}(l)
 	}
@@ -243,14 +258,25 @@ func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key K
 
 	if l.maxBatch != 0 && pos >= l.maxBatch-1 {
 		ctxs := l.batch.contexts
+		spans := l.batch.spans
 		b.fetchExecuted = true
 		l.batch = nil
 		go func(l *Loader[KeyT, ValueT], ctxs []context.Context) {
-			for _, ctx := range ctxs {
-				_, span := l.tracer.Start(ctx, "dataloadgen.fetch.keylimit")
-				defer span.End()
+			if l.tracer != nil {
+				for _, ctx := range ctxs {
+					_, span := l.tracer.Start(ctx, "dataloadgen.fetch.keylimit")
+					defer span.End()
+				}
 			}
+
 			b.results, b.errors = l.fetch(b.keys)
+
+			if l.tracer != nil {
+				for _, span := range spans {
+					span.End()
+				}
+			}
+
 			close(b.done)
 		}(l, ctxs)
 	}
