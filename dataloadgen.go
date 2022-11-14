@@ -105,15 +105,15 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 		return it
 	}
 
-	_, loadSpan := l.tracer.Start(ctx, "dataloadgen.load")
-	defer loadSpan.End()
-
 	l.startBatch()
 
-	l.batch.contexts = append(l.batch.contexts, ctx)
-
-	_, waitSpan := l.tracer.Start(ctx, "dataloadgen.wait")
-	l.batch.spans = append(l.batch.spans, waitSpan)
+	if l.tracer != nil {
+		_, loadSpan := l.tracer.Start(ctx, "dataloadgen.load")
+		defer loadSpan.End()
+		l.batch.contexts = append(l.batch.contexts, ctx)
+		_, waitSpan := l.tracer.Start(ctx, "dataloadgen.wait")
+		l.batch.spans = append(l.batch.spans, waitSpan)
+	}
 
 	batch := l.batch
 	pos := l.addKeyToBatch(batch, key)
@@ -230,15 +230,19 @@ func (l *Loader[KeyT, ValueT]) startBatch() {
 			l.batch = nil
 			l.mu.Unlock()
 
-			for _, ctx := range ctxs {
-				_, span := l.tracer.Start(ctx, "dataloadgen.fetch.timelimit")
-				defer span.End()
+			if l.tracer != nil {
+				for _, ctx := range ctxs {
+					_, span := l.tracer.Start(ctx, "dataloadgen.fetch.timelimit")
+					defer span.End()
+				}
 			}
 
 			batch.results, batch.errors = l.fetch(batch.keys)
 
-			for _, span := range spans {
-				span.End()
+			if l.tracer != nil {
+				for _, span := range spans {
+					span.End()
+				}
 			}
 
 			close(batch.done)
@@ -258,15 +262,19 @@ func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key K
 		b.fetchExecuted = true
 		l.batch = nil
 		go func(l *Loader[KeyT, ValueT], ctxs []context.Context) {
-			for _, ctx := range ctxs {
-				_, span := l.tracer.Start(ctx, "dataloadgen.fetch.keylimit")
-				defer span.End()
+			if l.tracer != nil {
+				for _, ctx := range ctxs {
+					_, span := l.tracer.Start(ctx, "dataloadgen.fetch.keylimit")
+					defer span.End()
+				}
 			}
 
 			b.results, b.errors = l.fetch(b.keys)
 
-			for _, span := range spans {
-				span.End()
+			if l.tracer != nil {
+				for _, span := range spans {
+					span.End()
+				}
 			}
 
 			close(b.done)
