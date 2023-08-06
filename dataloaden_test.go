@@ -76,10 +76,13 @@ func TestUserLoader(t *testing.T) {
 			if u[3].Name != "user U4" {
 				t.Fatal("not equal")
 			}
-			if err[1] == nil {
+			if err == nil {
 				t.Fatal("error expected")
 			}
-			if err[2] == nil {
+			if err.(dataloadgen.ErrorSlice)[1] == nil {
+				t.Fatal("error expected")
+			}
+			if err.(dataloadgen.ErrorSlice)[2] == nil {
 				t.Fatal("error expected")
 			}
 		})
@@ -137,8 +140,8 @@ func TestUserLoader(t *testing.T) {
 		t.Run("load many users", func(t *testing.T) {
 			t.Parallel()
 			u, err := dl.LoadAll(ctx, []string{"U2", "U4"})
-			if len(err) != 0 {
-				t.Fatal("wrong length", err)
+			if err != nil {
+				t.Fatal(err)
 			}
 			if u[0].Name != "user U2" {
 				t.Fatal("not equal")
@@ -179,7 +182,7 @@ func TestUserLoader(t *testing.T) {
 			if u[1].ID != "U4" {
 				t.Fatal("not equal")
 			}
-			if err[2] == nil {
+			if err.(dataloadgen.ErrorSlice)[2] == nil {
 				t.Fatal("error expected")
 			}
 			if u[3].ID != "U9" {
@@ -274,11 +277,8 @@ func TestUserLoader(t *testing.T) {
 			t.Fatal("wrong length", fetches)
 		}
 
-		if err1[0] != nil {
-			t.Fatal(err1[0])
-		}
-		if err1[1] != nil {
-			t.Fatal(err1[1])
+		if err1 != nil {
+			t.Fatal(err1)
 		}
 		if "user U5" != users1[0].Name {
 			t.Fatal("not equal")
@@ -293,10 +293,10 @@ func TestUserLoader(t *testing.T) {
 			t.Fatal("wrong length", fetches)
 		}
 
-		if err2[0] != nil {
-			t.Fatal(err2[0])
+		if err2.(dataloadgen.ErrorSlice)[0] != nil {
+			t.Fatal(err2.(dataloadgen.ErrorSlice)[0])
 		}
-		if err2[1] == nil {
+		if err2.(dataloadgen.ErrorSlice)[1] == nil {
 			t.Fatal("error expected")
 		}
 		if "user U6" != users2[0].Name {
@@ -332,19 +332,19 @@ func TestUserLoader(t *testing.T) {
 				t.Fatal("not empty", user)
 			}
 		}
-		if len(errs) != 2 {
+		if len(errs.(dataloadgen.ErrorSlice)) != 2 {
 			t.Fatal("wrong length", errs)
 		}
-		if errs[0] == nil {
+		if errs.(dataloadgen.ErrorSlice)[0] == nil {
 			t.Fatal("error expected")
 		}
-		if "failed all fetches" != errs[0].Error() {
+		if "failed all fetches" != errs.(dataloadgen.ErrorSlice)[0].Error() {
 			t.Fatal("not equal")
 		}
-		if errs[1] == nil {
+		if errs.(dataloadgen.ErrorSlice)[1] == nil {
 			t.Fatal("error expected")
 		}
-		if "failed all fetches" != errs[1].Error() {
+		if "failed all fetches" != errs.(dataloadgen.ErrorSlice)[1].Error() {
 			t.Fatal("not equal")
 		}
 	})

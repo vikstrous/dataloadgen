@@ -14,7 +14,7 @@ import (
 
 // copied and adapted from github.com/graph-gophers/dataloader
 func BenchmarkLoaderFromDataloader(b *testing.B) {
-	var a = &Avg{}
+	a := &Avg{}
 	ctx := context.Background()
 	dl := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
 		a.Add(len(keys))
@@ -119,7 +119,7 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		errorLoader, _ := ErrorLoader(0)
 		_, err := errorLoader.LoadAll(ctx, []string{"1", "2", "3"})
-		if len(err) != 3 {
+		if len(err.(dataloadgen.ErrorSlice)) != 3 {
 			t.Error("LoadAll didn't return right number of errors")
 		}
 	})
@@ -128,13 +128,13 @@ func TestLoader(t *testing.T) {
 		t.Parallel()
 		loader, _ := OneErrorLoader(3)
 		_, errs := loader.LoadAll(ctx, []string{"1", "2", "3"})
-		if len(errs) != 3 {
+		if len(errs.(dataloadgen.ErrorSlice)) != 3 {
 			t.Errorf("LoadAll didn't return right number of errors (should match size of input)")
 		}
 
 		var errCount int = 0
 		var nilCount int = 0
-		for _, err := range errs {
+		for _, err := range errs.(dataloadgen.ErrorSlice) {
 			if err == nil {
 				nilCount++
 			} else {
@@ -177,8 +177,8 @@ func TestLoader(t *testing.T) {
 			}
 		}()
 		panicLoader, _ := PanicLoader(0)
-		_, errs := panicLoader.LoadAll(ctx, []string{"1"})
-		if len(errs) < 1 || errs[0].Error() != "Panic received in batch function: Programming error" {
+		_, err := panicLoader.LoadAll(ctx, []string{"1"})
+		if err == nil || err.Error() != "Panic received in batch function: Programming error" {
 			t.Error("Panic was not propagated as an error.")
 		}
 	})
@@ -508,9 +508,10 @@ func BatchOnlyLoader(max int) (*dataloadgen.Loader[string, string], *[][]string)
 			results = append(results, key)
 		}
 		return results, nil
-	}, dataloadgen.WithBatchCapacity(max)) //dataloadgen.WithClearCacheOnBatch())
+	}, dataloadgen.WithBatchCapacity(max)) // dataloadgen.WithClearCacheOnBatch())
 	return identityLoader, &loadCalls
 }
+
 func ErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
@@ -526,6 +527,7 @@ func ErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	}, dataloadgen.WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
+
 func OneErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
@@ -547,6 +549,7 @@ func OneErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) 
 	}, dataloadgen.WithBatchCapacity(max))
 	return identityLoader, &loadCalls
 }
+
 func PanicLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var loadCalls [][]string
 	panicLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
@@ -554,6 +557,7 @@ func PanicLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	}, dataloadgen.WithBatchCapacity(max)) //, withSilentLogger())
 	return panicLoader, &loadCalls
 }
+
 func BadLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
@@ -570,7 +574,7 @@ func BadLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 func NoCacheLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	//cache := &NoCache{}
+	// cache := &NoCache{}
 	identityLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)

@@ -2,6 +2,7 @@ package dataloadgen
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -37,7 +38,7 @@ func WithTracer(tracer trace.Tracer) Option {
 func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, []error), options ...Option) *Loader[KeyT, ValueT] {
 	config := &loaderConfig{
 		wait:     16 * time.Millisecond,
-		maxBatch: 0, //unlimited
+		maxBatch: 0, // unlimited
 	}
 	for _, o := range options {
 		o(config)
@@ -148,9 +149,21 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 	return thunk
 }
 
+// ErrorSlice represents a list of errors that contains at least one error
+type ErrorSlice []error
+
+// Error implements the error interface
+func (e ErrorSlice) Error() string {
+	combinedErr := errors.Join([]error(e)...)
+	if combinedErr == nil {
+		return "no error data"
+	}
+	return combinedErr.Error()
+}
+
 // LoadAll fetches many keys at once. It will be broken into appropriate sized
 // sub batches depending on how the loader is configured
-func (l *Loader[KeyT, ValueT]) LoadAll(ctx context.Context, keys []KeyT) ([]ValueT, []error) {
+func (l *Loader[KeyT, ValueT]) LoadAll(ctx context.Context, keys []KeyT) ([]ValueT, error) {
 	thunks := make([]func() (ValueT, error), len(keys))
 
 	for i, key := range keys {
@@ -169,24 +182,31 @@ func (l *Loader[KeyT, ValueT]) LoadAll(ctx context.Context, keys []KeyT) ([]Valu
 	if allNil {
 		return values, nil
 	}
-	return values, errors
+	return values, ErrorSlice(errors)
 }
 
 // LoadAllThunk returns a function that when called will block waiting for a ValueT.
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
-func (l *Loader[KeyT, ValueT]) LoadAllThunk(ctx context.Context, keys []KeyT) func() ([]ValueT, []error) {
+func (l *Loader[KeyT, ValueT]) LoadAllThunk(ctx context.Context, keys []KeyT) func() ([]ValueT, error) {
 	thunks := make([]func() (ValueT, error), len(keys))
 	for i, key := range keys {
 		thunks[i] = l.LoadThunk(ctx, key)
 	}
-	return func() ([]ValueT, []error) {
+	return func() ([]ValueT, error) {
 		values := make([]ValueT, len(keys))
 		errors := make([]error, len(keys))
+		allNil := true
 		for i, thunk := range thunks {
 			values[i], errors[i] = thunk()
+			if allNil == true && errors[i] != nil {
+				allNil = false
+			}
 		}
-		return values, errors
+		if allNil {
+			return values, nil
+		}
+		return values, ErrorSlice(errors)
 	}
 }
 
