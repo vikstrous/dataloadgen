@@ -1,4 +1,4 @@
-package dataloadgen_test
+package benchmark_test
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/graph-gophers/dataloader"
-	"github.com/vektah/dataloaden/example"
 	"github.com/vikstrous/dataloadgen"
 )
 
@@ -196,12 +195,13 @@ func BenchmarkDataloadgen(b *testing.B) {
 		}
 	})
 }
+
 func BenchmarkDataloaden(b *testing.B) {
 	dl := NewUserLoader(UserLoaderConfig{
 		Wait:     500 * time.Nanosecond,
 		MaxBatch: 100,
-		Fetch: func(keys []int) ([]*example.User, []error) {
-			users := make([]*example.User, len(keys))
+		Fetch: func(keys []int) ([]*User, []error) {
+			users := make([]*User, len(keys))
 			errors := make([]error, len(keys))
 
 			for i, key := range keys {
@@ -210,7 +210,7 @@ func BenchmarkDataloaden(b *testing.B) {
 				} else if rand.Int()%100 == 1 {
 					users[i] = nil
 				} else {
-					users[i] = &example.User{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}
+					users[i] = &User{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}
 				}
 			}
 			return users, errors
@@ -223,7 +223,7 @@ func BenchmarkDataloaden(b *testing.B) {
 			queries = append(queries, rand.Int()%300)
 		}
 		b.ResetTimer()
-		thunks := make([]func() (*example.User, error), b.N)
+		thunks := make([]func() (*User, error), b.N)
 		for i := 0; i < b.N; i++ {
 			thunks[i] = dl.LoadThunk(queries[i])
 		}
@@ -239,7 +239,7 @@ func BenchmarkDataloaden(b *testing.B) {
 			queries = append(queries, rand.Int())
 		}
 		b.ResetTimer()
-		thunks := make([]func() (*example.User, error), b.N)
+		thunks := make([]func() (*User, error), b.N)
 		for i := 0; i < b.N; i++ {
 			thunks[i] = dl.LoadThunk(queries[i])
 		}

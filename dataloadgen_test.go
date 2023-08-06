@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/vikstrous/dataloadgen"
 )
 
@@ -61,16 +60,30 @@ func TestEdgeCases(t *testing.T) {
 	t.Run("load function called only once when cached", func(t *testing.T) {
 		for i := 0; i < 2; i++ {
 			_, err := dl.Load(ctx, 0)
-			require.Error(t, err)
-			require.Len(t, fetches, 1)
-			require.Len(t, fetches[0], 1)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if len(fetches) != 1 {
+				t.Fatal("wrong number of fetches", fetches)
+			}
+			if len(fetches[0]) != 1 {
+				t.Fatal("wrong number of keys in fetch request")
+			}
 		}
 		for i := 0; i < 2; i++ {
 			r, err := dl.Load(ctx, 1)
-			require.NoError(t, err)
-			require.Len(t, fetches, 2)
-			require.Len(t, fetches[1], 1)
-			require.Equal(t, "1", r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fetches) != 2 {
+				t.Fatal("wrong number of fetches", fetches)
+			}
+			if len(fetches[1]) != 1 {
+				t.Fatal("wrong number of keys in fetch request")
+			}
+			if r != "1" {
+				t.Fatal("wrong data fetched", r)
+			}
 		}
 	})
 }

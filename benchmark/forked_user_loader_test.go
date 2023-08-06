@@ -1,16 +1,20 @@
-package dataloadgen_test
+package benchmark_test
 
 import (
 	"sync"
 	"time"
-
-	"github.com/vektah/dataloaden/example"
 )
+
+// User is some kind of database backed model
+type User struct {
+	ID   string
+	Name string
+}
 
 // UserLoaderConfig captures the config to create a new UserLoader
 type UserLoaderConfig struct {
 	// Fetch is a method that provides the data for the loader
-	Fetch func(keys []int) ([]*example.User, []error)
+	Fetch func(keys []int) ([]*User, []error)
 
 	// Wait is how long wait before sending a batch
 	Wait time.Duration
@@ -31,7 +35,7 @@ func NewUserLoader(config UserLoaderConfig) *UserLoader {
 // UserLoader batches and caches requests
 type UserLoader struct {
 	// this method provides the data for the loader
-	fetch func(keys []int) ([]*example.User, []error)
+	fetch func(keys []int) ([]*User, []error)
 
 	// how long to done before sending a batch
 	wait time.Duration
@@ -42,7 +46,7 @@ type UserLoader struct {
 	// INTERNAL
 
 	// lazily created cache
-	cache map[int]*example.User
+	cache map[int]*User
 
 	// the current batch. keys will continue to be collected until timeout is hit,
 	// then everything will be sent to the fetch method and out to the listeners
@@ -54,25 +58,25 @@ type UserLoader struct {
 
 type userLoaderBatch struct {
 	keys    []int
-	data    []*example.User
+	data    []*User
 	error   []error
 	closing bool
 	done    chan struct{}
 }
 
 // Load a User by key, batching and caching will be applied automatically
-func (l *UserLoader) Load(key int) (*example.User, error) {
+func (l *UserLoader) Load(key int) (*User, error) {
 	return l.LoadThunk(key)()
 }
 
 // LoadThunk returns a function that when called will block waiting for a User.
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
-func (l *UserLoader) LoadThunk(key int) func() (*example.User, error) {
+func (l *UserLoader) LoadThunk(key int) func() (*User, error) {
 	l.mu.Lock()
 	if it, ok := l.cache[key]; ok {
 		l.mu.Unlock()
-		return func() (*example.User, error) {
+		return func() (*User, error) {
 			return it, nil
 		}
 	}
@@ -83,10 +87,10 @@ func (l *UserLoader) LoadThunk(key int) func() (*example.User, error) {
 	pos := batch.keyIndex(l, key)
 	l.mu.Unlock()
 
-	return func() (*example.User, error) {
+	return func() (*User, error) {
 		<-batch.done
 
-		var data *example.User
+		var data *User
 		if pos < len(batch.data) {
 			data = batch.data[pos]
 		}
@@ -111,14 +115,14 @@ func (l *UserLoader) LoadThunk(key int) func() (*example.User, error) {
 
 // LoadAll fetches many keys at once. It will be broken into appropriate sized
 // sub batches depending on how the loader is configured
-func (l *UserLoader) LoadAll(keys []int) ([]*example.User, []error) {
-	results := make([]func() (*example.User, error), len(keys))
+func (l *UserLoader) LoadAll(keys []int) ([]*User, []error) {
+	results := make([]func() (*User, error), len(keys))
 
 	for i, key := range keys {
 		results[i] = l.LoadThunk(key)
 	}
 
-	users := make([]*example.User, len(keys))
+	users := make([]*User, len(keys))
 	errors := make([]error, len(keys))
 	for i, thunk := range results {
 		users[i], errors[i] = thunk()
@@ -129,13 +133,13 @@ func (l *UserLoader) LoadAll(keys []int) ([]*example.User, []error) {
 // LoadAllThunk returns a function that when called will block waiting for a Users.
 // This method should be used if you want one goroutine to make requests to many
 // different data loaders without blocking until the thunk is called.
-func (l *UserLoader) LoadAllThunk(keys []int) func() ([]*example.User, []error) {
-	results := make([]func() (*example.User, error), len(keys))
+func (l *UserLoader) LoadAllThunk(keys []int) func() ([]*User, []error) {
+	results := make([]func() (*User, error), len(keys))
 	for i, key := range keys {
 		results[i] = l.LoadThunk(key)
 	}
-	return func() ([]*example.User, []error) {
-		users := make([]*example.User, len(keys))
+	return func() ([]*User, []error) {
+		users := make([]*User, len(keys))
 		errors := make([]error, len(keys))
 		for i, thunk := range results {
 			users[i], errors[i] = thunk()
@@ -147,7 +151,7 @@ func (l *UserLoader) LoadAllThunk(keys []int) func() ([]*example.User, []error) 
 // Prime the cache with the provided key and value. If the key already exists, no change is made
 // and false is returned.
 // (To forcefully prime the cache, clear the key first with loader.clear(key).prime(key, value).)
-func (l *UserLoader) Prime(key int, value *example.User) bool {
+func (l *UserLoader) Prime(key int, value *User) bool {
 	l.mu.Lock()
 	var found bool
 	if _, found = l.cache[key]; !found {
@@ -167,9 +171,9 @@ func (l *UserLoader) Clear(key int) {
 	l.mu.Unlock()
 }
 
-func (l *UserLoader) unsafeSet(key int, value *example.User) {
+func (l *UserLoader) unsafeSet(key int, value *User) {
 	if l.cache == nil {
-		l.cache = map[int]*example.User{}
+		l.cache = map[int]*User{}
 	}
 	l.cache[key] = value
 }

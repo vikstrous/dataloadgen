@@ -8,10 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/vikstrous/dataloadgen"
 )
+
+type benchmarkUser struct {
+	Name string
+	ID   string
+}
 
 func TestUserLoader(t *testing.T) {
 	ctx := context.Background()
@@ -45,24 +48,40 @@ func TestUserLoader(t *testing.T) {
 		t.Run("load user successfully", func(t *testing.T) {
 			t.Parallel()
 			u, err := dl.Load(ctx, "U1")
-			require.NoError(t, err)
-			require.Equal(t, u.ID, "U1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if u.ID != "U1" {
+				t.Fatal("not equal")
+			}
 		})
 
 		t.Run("load failed user", func(t *testing.T) {
 			t.Parallel()
 			u, err := dl.Load(ctx, "E1")
-			require.Error(t, err)
-			require.Nil(t, u)
+			if err == nil {
+				t.Fatal("error expected")
+			}
+			if u != nil {
+				t.Fatal("not nil", u)
+			}
 		})
 
 		t.Run("load many users", func(t *testing.T) {
 			t.Parallel()
 			u, err := dl.LoadAll(ctx, []string{"U2", "E2", "E3", "U4"})
-			require.Equal(t, u[0].Name, "user U2")
-			require.Equal(t, u[3].Name, "user U4")
-			require.Error(t, err[1])
-			require.Error(t, err[2])
+			if u[0].Name != "user U2" {
+				t.Fatal("not equal")
+			}
+			if u[3].Name != "user U4" {
+				t.Fatal("not equal")
+			}
+			if err[1] == nil {
+				t.Fatal("error expected")
+			}
+			if err[2] == nil {
+				t.Fatal("error expected")
+			}
 		})
 
 		t.Run("load thunk", func(t *testing.T) {
@@ -71,12 +90,20 @@ func TestUserLoader(t *testing.T) {
 			thunk2 := dl.LoadThunk(ctx, "E5")
 
 			u1, err1 := thunk1()
-			require.NoError(t, err1)
-			require.Equal(t, "user U5", u1.Name)
+			if err1 != nil {
+				t.Fatal(err1)
+			}
+			if "user U5" != u1.Name {
+				t.Fatal("not equal")
+			}
 
 			u2, err2 := thunk2()
-			require.Error(t, err2)
-			require.Nil(t, u2)
+			if err2 == nil {
+				t.Fatal("error expected")
+			}
+			if u2 != nil {
+				t.Fatal("not nil", u2)
+			}
 		})
 	})
 
@@ -84,26 +111,41 @@ func TestUserLoader(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
-		require.Len(t, fetches, 2)
-		assert.Len(t, fetches[0], 5)
-		assert.Len(t, fetches[1], 3)
+		if len(fetches) != 2 {
+			t.Fatal("wrong length", fetches)
+		}
+		if len(fetches[0]) != 5 {
+			t.Error("wrong number of keys in first fetch", fetches[0])
+		}
+		if len(fetches[1]) != 3 {
+			t.Error("wrong number of keys in second fetch", fetches[0])
+		}
 	})
 
 	t.Run("fetch more", func(t *testing.T) {
-
 		t.Run("previously cached", func(t *testing.T) {
 			t.Parallel()
 			u, err := dl.Load(ctx, "U1")
-			require.NoError(t, err)
-			require.Equal(t, u.ID, "U1")
+			if err != nil {
+				t.Fatal("error expected")
+			}
+			if u.ID != "U1" {
+				t.Fatal("not equal")
+			}
 		})
 
 		t.Run("load many users", func(t *testing.T) {
 			t.Parallel()
 			u, err := dl.LoadAll(ctx, []string{"U2", "U4"})
-			require.Len(t, err, 0)
-			require.Equal(t, u[0].Name, "user U2")
-			require.Equal(t, u[1].Name, "user U4")
+			if len(err) != 0 {
+				t.Fatal("wrong length", err)
+			}
+			if u[0].Name != "user U2" {
+				t.Fatal("not equal")
+			}
+			if u[1].Name != "user U4" {
+				t.Fatal("not equal")
+			}
 		})
 	})
 
@@ -111,25 +153,41 @@ func TestUserLoader(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
-		require.Len(t, fetches, 2)
+		if len(fetches) != 2 {
+			t.Fatal("wrong length", fetches)
+		}
 	})
 
 	t.Run("fetch partial", func(t *testing.T) {
 		t.Run("errors not in cache cache value", func(t *testing.T) {
 			t.Parallel()
 			u, err := dl.Load(ctx, "E2")
-			require.Nil(t, u)
-			require.Error(t, err)
+			if u != nil {
+				t.Fatal("not nil", u)
+			}
+			if err == nil {
+				t.Fatal("error expected")
+			}
 		})
 
 		t.Run("load all", func(t *testing.T) {
 			t.Parallel()
 			u, err := dl.LoadAll(ctx, []string{"U1", "U4", "E1", "U9", "U5"})
-			require.Equal(t, u[0].ID, "U1")
-			require.Equal(t, u[1].ID, "U4")
-			require.Error(t, err[2])
-			require.Equal(t, u[3].ID, "U9")
-			require.Equal(t, u[4].ID, "U5")
+			if u[0].ID != "U1" {
+				t.Fatal("not equal")
+			}
+			if u[1].ID != "U4" {
+				t.Fatal("not equal")
+			}
+			if err[2] == nil {
+				t.Fatal("error expected")
+			}
+			if u[3].ID != "U9" {
+				t.Fatal("not equal")
+			}
+			if u[4].ID != "U5" {
+				t.Fatal("not equal")
+			}
 		})
 	})
 
@@ -137,17 +195,28 @@ func TestUserLoader(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
-		require.Len(t, fetches, 3)
-		require.Len(t, fetches[2], 1) // U9 only because E1 and E2 are already cached as failed and only U9 is new
+		if len(fetches) != 3 {
+			t.Fatal("wrong length", fetches)
+		}
+		// U9 only because E1 and E2 are already cached as failed and only U9 is new
+		if len(fetches[2]) != 1 {
+			t.Fatal("wrong length", fetches[2])
+		}
 	})
 
 	t.Run("primed reads dont hit the fetcher", func(t *testing.T) {
 		dl.Prime("U99", &benchmarkUser{ID: "U99", Name: "Primed user"})
 		u, err := dl.Load(ctx, "U99")
-		require.NoError(t, err)
-		require.Equal(t, "Primed user", u.Name)
+		if err != nil {
+			t.Fatal("error expected")
+		}
+		if "Primed user" != u.Name {
+			t.Fatal("not equal")
+		}
 
-		require.Len(t, fetches, 3)
+		if len(fetches) != 3 {
+			t.Fatal("wrong length", fetches)
+		}
 	})
 
 	t.Run("priming in a loop is safe", func(t *testing.T) {
@@ -161,23 +230,39 @@ func TestUserLoader(t *testing.T) {
 		}
 
 		u, err := dl.Load(ctx, "Alpha")
-		require.NoError(t, err)
-		require.Equal(t, "Alpha", u.Name)
+		if err != nil {
+			t.Fatal("error expected")
+		}
+		if "Alpha" != u.Name {
+			t.Fatal("not equal")
+		}
 
 		u, err = dl.Load(ctx, "Omega")
-		require.NoError(t, err)
-		require.Equal(t, "Omega", u.Name)
+		if err != nil {
+			t.Fatal("error expected")
+		}
+		if "Omega" != u.Name {
+			t.Fatal("not equal")
+		}
 
-		require.Len(t, fetches, 3)
+		if len(fetches) != 3 {
+			t.Fatal("wrong length", fetches)
+		}
 	})
 
 	t.Run("cleared results will go back to the fetcher", func(t *testing.T) {
 		dl.Clear("U99")
 		u, err := dl.Load(ctx, "U99")
-		require.NoError(t, err)
-		require.Equal(t, "user U99", u.Name)
+		if err != nil {
+			t.Fatal("error expected")
+		}
+		if "user U99" != u.Name {
+			t.Fatal("not equal")
+		}
 
-		require.Len(t, fetches, 4)
+		if len(fetches) != 4 {
+			t.Fatal("wrong length", fetches)
+		}
 	})
 
 	t.Run("load all thunk", func(t *testing.T) {
@@ -185,41 +270,82 @@ func TestUserLoader(t *testing.T) {
 		thunk2 := dl.LoadAllThunk(ctx, []string{"U6", "E6"})
 
 		users1, err1 := thunk1()
-		require.Len(t, fetches, 5)
+		if len(fetches) != 5 {
+			t.Fatal("wrong length", fetches)
+		}
 
-		require.NoError(t, err1[0])
-		require.NoError(t, err1[1])
-		require.Equal(t, "user U5", users1[0].Name)
-		require.Equal(t, "user U6", users1[1].Name)
+		if err1[0] != nil {
+			t.Fatal(err1[0])
+		}
+		if err1[1] != nil {
+			t.Fatal(err1[1])
+		}
+		if "user U5" != users1[0].Name {
+			t.Fatal("not equal")
+		}
+		if "user U6" != users1[1].Name {
+			t.Fatal("not equal")
+		}
 
 		users2, err2 := thunk2()
-		require.Len(t, fetches, 5) // already cached
+		// already cached
+		if len(fetches) != 5 {
+			t.Fatal("wrong length", fetches)
+		}
 
-		require.NoError(t, err2[0])
-		require.Error(t, err2[1])
-		require.Equal(t, "user U6", users2[0].Name)
+		if err2[0] != nil {
+			t.Fatal(err2[0])
+		}
+		if err2[1] == nil {
+			t.Fatal("error expected")
+		}
+		if "user U6" != users2[0].Name {
+			t.Fatal("not equal")
+		}
 	})
 
 	t.Run("single error return value works", func(t *testing.T) {
 		user, err := dl.Load(ctx, "F1")
-		require.Error(t, err)
-		require.Equal(t, "failed all fetches", err.Error())
-		require.Empty(t, user)
-		require.Len(t, fetches, 6)
+		if err == nil {
+			t.Fatal("error expected")
+		}
+		if "failed all fetches" != err.Error() {
+			t.Fatal("not equal")
+		}
+		if user != nil {
+			t.Fatal("not empty", user)
+		}
+		if len(fetches) != 6 {
+			t.Fatal("wrong length", fetches)
+		}
 	})
 
 	t.Run("LoadAll does a single fetch", func(t *testing.T) {
 		dl.Clear("U1")
 		dl.Clear("F1")
 		users, errs := dl.LoadAll(ctx, []string{"F1", "U1"})
-		require.Len(t, fetches, 7)
-		for _, user := range users {
-			require.Empty(t, user)
+		if len(fetches) != 7 {
+			t.Fatal("wrong length", fetches)
 		}
-		require.Len(t, errs, 2)
-		require.Error(t, errs[0])
-		require.Equal(t, "failed all fetches", errs[0].Error())
-		require.Error(t, errs[1])
-		require.Equal(t, "failed all fetches", errs[1].Error())
+		for _, user := range users {
+			if user != nil {
+				t.Fatal("not empty", user)
+			}
+		}
+		if len(errs) != 2 {
+			t.Fatal("wrong length", errs)
+		}
+		if errs[0] == nil {
+			t.Fatal("error expected")
+		}
+		if "failed all fetches" != errs[0].Error() {
+			t.Fatal("not equal")
+		}
+		if errs[1] == nil {
+			t.Fatal("error expected")
+		}
+		if "failed all fetches" != errs[1].Error() {
+			t.Fatal("not equal")
+		}
 	})
 }
