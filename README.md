@@ -13,7 +13,7 @@ To add this package as a dependency:
 go get github.com/vikstrous/dataloadgen
 ```
 
-See the example in the documentation: https://pkg.go.dev/github.com/vikstrous/dataloadgen
+See the [example](https://pkg.go.dev/github.com/vikstrous/dataloadgen#example-Loader) in the documentation.
 
 This package has evolved to include some ideas from dataloader https://github.com/graph-gophers/dataloader
 
