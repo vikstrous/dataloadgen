@@ -1,37 +1,78 @@
 # dataloadgen
 
-Godoc: https://pkg.go.dev/github.com/vikstrous/dataloadgen
+[godoc](https://pkg.go.dev/github.com/vikstrous/dataloadgen)
 
-This is a fork of https://github.com/vektah/dataloaden that uses generics
-instead of code genation. See the docs there for the motivation and usage details.
+`dataloadgen` is an implementation of a pattern popularized by [Facebook's Dataloader](https://github.com/graphql/dataloader).
 
-With this package you can skip the generation step! That's why it's dataload`gen` (gen stands for generics).
+It works as follows:
+* A Loader object is created per graphql request.
+* Each of many concurrently executing graphql resolver functions call Load() on the Loader object with different keys. Let's say K1, K2, K3
+* Each call to Load() with a new key is delayed slightly (a few milliseconds) so that the Loader can load them together.
+* The customizable fetch function of the loader takes a list of keys and loads data for all of them in a single batched request to the data storage layer.
+* The response is cached for the duration of the graphql request and returned to the caller.
 
-To add this package as a dependency:
+Usage:
 
-```
+```sh
 go get github.com/vikstrous/dataloadgen
 ```
 
-See the [example](https://pkg.go.dev/github.com/vikstrous/dataloadgen#example-Loader) in the documentation.
+See the usage [example](https://pkg.go.dev/github.com/vikstrous/dataloadgen#example-Loader) in the documentation:
+```go
+package main
 
-This package has evolved to include some ideas from dataloader https://github.com/graph-gophers/dataloader
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"time"
 
-Benchmarks show that this package is faster than both of the above and offers the best of both worlds.
+	"github.com/vikstrous/dataloadgen"
+)
+
+// fetchFn is shown as a function here, but it might work better as a method
+func fetchFn(keys []string) (ret []int, errs []error) {
+    for _, key := range keys {
+        num, err := strconv.ParseInt(key, 10, 32)
+        ret = append(ret, int(num))
+        errs = append(errs, err)
+    }
+    return
+}
+
+func main() {
+    ctx := context.Background()
+    // Per-request setup code:
+    loader := dataloadgen.NewLoader(fetchFn)
+    // In every graphql resolver:
+    result, err := loader.Load(ctx, "1")
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(result)
+}
+```
+
+## Comparison to others
+
+[dataloaden](https://github.com/vektah/dataloaden) uses code generation and has similar performance
+[dataloader](https://github.com/graph-gophers/dataloader) does not use code generation but has much worse performance and is more difficult to use
+
+Benchmarks show that this package is faster than both of the above and I find it easier to use.
 
 ```
-BenchmarkDataloader/caches-8                     4570850               250.1 ns/op           147 B/op          3 allocs/op
-BenchmarkDataloader/random_spread-8               766516              1769 ns/op             744 B/op         17 allocs/op
-BenchmarkDataloader/concurently-8                  13796             78000 ns/op           42645 B/op        229 allocs/op
-BenchmarkDataloader/all_in_one_request-8            9380          11457205 ns/op         2279729 B/op      46967 allocs/op
+BenchmarkDataloader/caches-8                             4152324               270.3 ns/op           168 B/op          5 allocs/op
+BenchmarkDataloader/random_spread-8                      1000000              1281 ns/op             626 B/op         11 allocs/op
+BenchmarkDataloader/concurently-8                          33159             55575 ns/op           32649 B/op        160 allocs/op
+BenchmarkDataloader/all_in_one_request-8                   10000           7556166 ns/op         2574411 B/op      60032 allocs/op
 
-BenchmarkDataloaden/caches-8                    21249274                63.10 ns/op           24 B/op          1 allocs/op
-BenchmarkDataloaden/random_spread-8              1501452               879.7 ns/op           266 B/op          5 allocs/op
-BenchmarkDataloaden/concurently-8                  22455             49690 ns/op            2910 B/op         75 allocs/op
-BenchmarkDataloaden/all_in_one_request-8           10000           1228241 ns/op          487878 B/op      10007 allocs/op
+BenchmarkDataloaden/caches-8                            17960090                67.73 ns/op           24 B/op          1 allocs/op
+BenchmarkDataloaden/random_spread-8                      1223949               955.0 ns/op           279 B/op          5 allocs/op
+BenchmarkDataloaden/concurently-8                          27093             43594 ns/op            2867 B/op         76 allocs/op
+BenchmarkDataloaden/all_in_one_request-8                   10000           1410499 ns/op          487876 B/op      10007 allocs/op
 
-BenchmarkDataloadgen/caches-8                   22181911                55.39 ns/op            8 B/op          0 allocs/op
-BenchmarkDataloadgen/random_spread-8             2375029               457.1 ns/op           226 B/op          4 allocs/op
-BenchmarkDataloadgen/concurently-8                 30919             36685 ns/op            2699 B/op         70 allocs/op
-BenchmarkDataloadgen/all_in_one_request-8          10000           1042714 ns/op          573618 B/op          7 allocs/op
+BenchmarkDataloadgen/caches-8                           22032517                53.61 ns/op            8 B/op          0 allocs/op
+BenchmarkDataloadgen/random_spread-8                     2558128               483.7 ns/op           287 B/op          4 allocs/op
+BenchmarkDataloadgen/concurently-8                         31900             34903 ns/op            2906 B/op         71 allocs/op
+BenchmarkDataloadgen/all_in_one_request-8                  10000           1032841 ns/op          573619 B/op          7 allocs/op
 ```
