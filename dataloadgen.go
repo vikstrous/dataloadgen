@@ -35,7 +35,7 @@ func WithTracer(tracer trace.Tracer) Option {
 }
 
 // NewLoader creates a new GenericLoader given a fetch, wait, and maxBatch
-func NewLoader[KeyT comparable, ValueT any](fetch func(keys []KeyT) ([]ValueT, []error), options ...Option) *Loader[KeyT, ValueT] {
+func NewLoader[KeyT comparable, ValueT any](fetch func(ctx context.Context, keys []KeyT) ([]ValueT, []error), options ...Option) *Loader[KeyT, ValueT] {
 	config := &loaderConfig{
 		wait:     16 * time.Millisecond,
 		maxBatch: 0, // unlimited
@@ -64,7 +64,7 @@ type loaderConfig struct {
 // Loader batches and caches requests
 type Loader[KeyT comparable, ValueT any] struct {
 	// this method provides the data for the loader
-	fetch func(keys []KeyT) ([]ValueT, []error)
+	fetch func(ctx context.Context, keys []KeyT) ([]ValueT, []error)
 
 	*loaderConfig
 
@@ -87,6 +87,7 @@ type loaderBatch[KeyT comparable, ValueT any] struct {
 	errors        []error
 	fetchExecuted bool
 	done          chan struct{}
+	firstContext  context.Context
 	contexts      []context.Context
 	spans         []trace.Span
 }
@@ -106,7 +107,7 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 		return it
 	}
 
-	l.startBatch()
+	l.startBatch(ctx)
 
 	if l.tracer != nil {
 		_, loadSpan := l.tracer.Start(ctx, "dataloadgen.load")
@@ -230,9 +231,12 @@ func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 	l.mu.Unlock()
 }
 
-func (l *Loader[KeyT, ValueT]) startBatch() {
+func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 	if l.batch == nil {
-		batch := &loaderBatch[KeyT, ValueT]{done: make(chan struct{})}
+		batch := &loaderBatch[KeyT, ValueT]{
+			done:         make(chan struct{}),
+			firstContext: ctx,
+		}
 		l.batch = batch
 		go func(l *Loader[KeyT, ValueT]) {
 			time.Sleep(l.wait)
@@ -257,7 +261,7 @@ func (l *Loader[KeyT, ValueT]) startBatch() {
 				}
 			}
 
-			batch.results, batch.errors = l.fetch(batch.keys)
+			batch.results, batch.errors = l.fetch(batch.firstContext, batch.keys)
 
 			if l.tracer != nil {
 				for _, span := range spans {
@@ -289,7 +293,7 @@ func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key K
 				}
 			}
 
-			b.results, b.errors = l.fetch(b.keys)
+			b.results, b.errors = l.fetch(b.firstContext, b.keys)
 
 			if l.tracer != nil {
 				for _, span := range spans {

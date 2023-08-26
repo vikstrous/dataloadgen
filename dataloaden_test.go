@@ -20,7 +20,7 @@ func TestUserLoader(t *testing.T) {
 	ctx := context.Background()
 	var fetches [][]string
 	var mu sync.Mutex
-	dl := dataloadgen.NewLoader(func(keys []string) ([]*benchmarkUser, []error) {
+	dl := dataloadgen.NewLoader(func(_ context.Context, keys []string) ([]*benchmarkUser, []error) {
 		mu.Lock()
 		fetches = append(fetches, keys)
 		mu.Unlock()

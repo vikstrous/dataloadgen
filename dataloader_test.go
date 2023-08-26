@@ -16,7 +16,7 @@ import (
 func BenchmarkLoaderFromDataloader(b *testing.B) {
 	a := &Avg{}
 	ctx := context.Background()
-	dl := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+	dl := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		a.Add(len(keys))
 		results = make([]string, 0, len(keys))
 		for _, key := range keys {
@@ -485,7 +485,7 @@ func TestLoader(t *testing.T) {
 func IDLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+	identityLoader := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()
@@ -500,7 +500,7 @@ func IDLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 func BatchOnlyLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+	identityLoader := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()
@@ -515,7 +515,7 @@ func BatchOnlyLoader(max int) (*dataloadgen.Loader[string, string], *[][]string)
 func ErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+	identityLoader := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()
@@ -531,7 +531,7 @@ func ErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 func OneErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+	identityLoader := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		results = make([]string, max)
 		errs = make([]error, max)
 		mu.Lock()
@@ -552,7 +552,7 @@ func OneErrorLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) 
 
 func PanicLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var loadCalls [][]string
-	panicLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+	panicLoader := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		panic("Programming error")
 	}, dataloadgen.WithBatchCapacity(max)) //, withSilentLogger())
 	return panicLoader, &loadCalls
@@ -561,7 +561,7 @@ func PanicLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 func BadLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	identityLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+	identityLoader := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()
@@ -575,7 +575,7 @@ func NoCacheLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
 	// cache := &NoCache{}
-	identityLoader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+	identityLoader := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()
@@ -592,7 +592,7 @@ func FaultyLoader() (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
 
-	loader := dataloadgen.NewLoader(func(keys []string) (results []string, errs []error) {
+	loader := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()

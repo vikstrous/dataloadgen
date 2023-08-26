@@ -114,7 +114,7 @@ func (k IntKey) Raw() interface{} { return k }
 
 func BenchmarkDataloadgen(b *testing.B) {
 	ctx := context.Background()
-	dl := dataloadgen.NewLoader(func(keys []int) ([]benchmarkUser, []error) {
+	dl := dataloadgen.NewLoader(func(_ context.Context, keys []int) ([]benchmarkUser, []error) {
 		users := make([]benchmarkUser, len(keys))
 		errors := make([]error, len(keys))
 

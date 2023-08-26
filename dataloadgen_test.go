@@ -13,7 +13,7 @@ import (
 
 func ExampleLoader() {
 	ctx := context.Background()
-	loader := dataloadgen.NewLoader(func(keys []string) (ret []int, errs []error) {
+	loader := dataloadgen.NewLoader(func(ctx context.Context, keys []string) (ret []int, errs []error) {
 		for _, key := range keys {
 			num, err := strconv.ParseInt(key, 10, 32)
 			ret = append(ret, int(num))
@@ -36,7 +36,7 @@ func TestEdgeCases(t *testing.T) {
 	ctx := context.Background()
 	var fetches [][]int
 	var mu sync.Mutex
-	dl := dataloadgen.NewLoader(func(keys []int) ([]string, []error) {
+	dl := dataloadgen.NewLoader(func(_ context.Context, keys []int) ([]string, []error) {
 		mu.Lock()
 		fetches = append(fetches, keys)
 		mu.Unlock()
