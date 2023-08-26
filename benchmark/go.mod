@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/graph-gophers/dataloader/v7 v7.1.0
-	github.com/vikstrous/dataloadgen v0.0.4
+	github.com/vikstrous/dataloadgen v0.0.6
 )
 
 require (

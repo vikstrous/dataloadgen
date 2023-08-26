@@ -61,8 +61,8 @@ func BenchmarkDataloader(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			queries = append(queries, rand.Int())
 		}
-		b.ResetTimer()
 		thunks := make([]func() (benchmarkUser, error), b.N)
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			thunks[i] = dl.Load(ctx, queries[i])
 		}
@@ -72,7 +72,7 @@ func BenchmarkDataloader(b *testing.B) {
 		}
 	})
 
-	b.Run("concurently", func(b *testing.B) {
+	b.Run("10 concurently", func(b *testing.B) {
 		queries := []int{}
 		for n := 0; n < b.N*10; n++ {
 			queries = append(queries, rand.Int())
@@ -154,8 +154,8 @@ func BenchmarkDataloadgen(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			queries = append(queries, rand.Int())
 		}
-		b.ResetTimer()
 		thunks := make([]func() (benchmarkUser, error), b.N)
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			thunks[i] = dl.LoadThunk(ctx, queries[i])
 		}
@@ -165,7 +165,7 @@ func BenchmarkDataloadgen(b *testing.B) {
 		}
 	})
 
-	b.Run("concurently", func(b *testing.B) {
+	b.Run("10 concurently", func(b *testing.B) {
 		queries := []int{}
 		for n := 0; n < 10*b.N; n++ {
 			queries = append(queries, rand.Int())
@@ -238,8 +238,8 @@ func BenchmarkDataloaden(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			queries = append(queries, rand.Int())
 		}
-		b.ResetTimer()
 		thunks := make([]func() (*User, error), b.N)
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			thunks[i] = dl.LoadThunk(queries[i])
 		}
@@ -249,7 +249,7 @@ func BenchmarkDataloaden(b *testing.B) {
 		}
 	})
 
-	b.Run("concurently", func(b *testing.B) {
+	b.Run("10 concurently", func(b *testing.B) {
 		queries := []int{}
 		for n := 0; n < b.N*10; n++ {
 			queries = append(queries, rand.Int())
