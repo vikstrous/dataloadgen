@@ -62,20 +62,20 @@ func main() {
 Benchmarks show that this package is faster than both of the above and I find it easier to use.
 
 ```
-BenchmarkDataloader/caches-8                             4363897               273.6 ns/op           168 B/op          5 allocs/op
-BenchmarkDataloader/random_spread-8                      1000000              1308 ns/op             620 B/op         11 allocs/op
-BenchmarkDataloader/10_concurently-8                       15818             80064 ns/op           29203 B/op        155 allocs/op
-BenchmarkDataloader/all_in_one_request-8                   10000           6886305 ns/op         2575523 B/op      60026 allocs/op
+BenchmarkDataloader/caches-8                 4363897               273.6 ns/op           168 B/op          5 allocs/op
+BenchmarkDataloader/random_spread-8          1000000              1308 ns/op             620 B/op         11 allocs/op
+BenchmarkDataloader/10_concurently-8           15818             80064 ns/op           29203 B/op        155 allocs/op
+BenchmarkDataloader/all_in_one_request-8       10000           6886305 ns/op         2575523 B/op      60026 allocs/op
 
-BenchmarkDataloaden/caches-8                            19571458                60.74 ns/op           24 B/op          1 allocs/op
-BenchmarkDataloaden/random_spread-8                      2477028               653.7 ns/op           302 B/op          5 allocs/op
-BenchmarkDataloaden/10_concurently-8                       20932             53285 ns/op            2802 B/op         75 allocs/op
-BenchmarkDataloaden/all_in_one_request-8                   10000           1303027 ns/op          487867 B/op      10007 allocs/op
+BenchmarkDataloaden/caches-8                19571458                60.74 ns/op           24 B/op          1 allocs/op
+BenchmarkDataloaden/random_spread-8          2477028               653.7 ns/op           302 B/op          5 allocs/op
+BenchmarkDataloaden/10_concurently-8           20932             53285 ns/op            2802 B/op         75 allocs/op
+BenchmarkDataloaden/all_in_one_request-8       10000           1303027 ns/op          487867 B/op      10007 allocs/op
 
-BenchmarkDataloadgen/caches-8                           22270087                53.23 ns/op            8 B/op          0 allocs/op
-BenchmarkDataloadgen/random_spread-8                     2454928               495.9 ns/op           289 B/op          4 allocs/op
-BenchmarkDataloadgen/10_concurently-8                      17260             65339 ns/op            9541 B/op         63 allocs/op
-BenchmarkDataloadgen/all_in_one_request-8                  10000            978196 ns/op          573651 B/op          8 allocs/op
+BenchmarkDataloadgen/caches-8               22270087                53.23 ns/op            8 B/op          0 allocs/op
+BenchmarkDataloadgen/random_spread-8         2454928               495.9 ns/op           289 B/op          4 allocs/op
+BenchmarkDataloadgen/10_concurently-8          17260             65339 ns/op            9541 B/op         63 allocs/op
+BenchmarkDataloadgen/all_in_one_request-8      10000            978196 ns/op          573651 B/op          8 allocs/op
 ```
 
 To run the benchmarks, run `go test -bench=. . -benchmem` from the benchmark directory.
