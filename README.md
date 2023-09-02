@@ -1,6 +1,6 @@
 # dataloadgen
 
-[godoc](https://pkg.go.dev/github.com/vikstrous/dataloadgen)
+[![Go Reference](https://pkg.go.dev/badge/github.com/vikstrous/dataloadgen.svg)](https://pkg.go.dev/github.com/vikstrous/dataloadgen)
 
 `dataloadgen` is an implementation of a pattern popularized by [Facebook's Dataloader](https://github.com/graphql/dataloader).
 
