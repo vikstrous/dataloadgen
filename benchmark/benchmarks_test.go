@@ -11,120 +11,76 @@ import (
 
 	"github.com/graph-gophers/dataloader/v7"
 	"github.com/vikstrous/dataloadgen"
+	"github.com/vikstrous/dataloadgen/benchmark"
+	yckaodataloader "github.com/yckao/go-dataloader"
 )
 
-// Benchmarks copied from https://github.com/vektah/dataloaden
-
-type benchmarkUser struct {
-	Name string
-	ID   string
-}
-
-func BenchmarkDataloader(b *testing.B) {
+func BenchmarkAll(b *testing.B) {
 	ctx := context.Background()
-	dl := dataloader.NewBatchedLoader(func(ctx context.Context, keys []int) []*dataloader.Result[benchmarkUser] {
-		users := make([]*dataloader.Result[benchmarkUser], len(keys))
+	dataloaderDL := dataloader.NewBatchedLoader(func(ctx context.Context, keys []int) []*dataloader.Result[benchmark.User] {
+		users := make([]*dataloader.Result[benchmark.User], len(keys))
 
 		for i, key := range keys {
-			if rand.Int()%100 == 1 {
-				users[i] = &dataloader.Result[benchmarkUser]{Error: fmt.Errorf("user not found")}
-			} else if rand.Int()%100 == 1 {
-				users[i] = &dataloader.Result[benchmarkUser]{}
+			if key%100 == 1 {
+				users[i] = &dataloader.Result[benchmark.User]{Error: fmt.Errorf("user not found")}
+			} else if key%100 == 1 {
+				users[i] = &dataloader.Result[benchmark.User]{}
 			} else {
-				users[i] = &dataloader.Result[benchmarkUser]{Data: benchmarkUser{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}}
+				users[i] = &dataloader.Result[benchmark.User]{Data: benchmark.User{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}}
 			}
 		}
 		return users
 	},
-		dataloader.WithBatchCapacity[int, benchmarkUser](100),
-		dataloader.WithWait[int, benchmarkUser](500*time.Nanosecond),
+		dataloader.WithBatchCapacity[int, benchmark.User](100),
+		dataloader.WithWait[int, benchmark.User](500*time.Nanosecond),
 	)
+	dataloadenDL := benchmark.NewUserLoader(benchmark.UserLoaderConfig{
+		Wait:     500 * time.Nanosecond,
+		MaxBatch: 100,
+		Fetch: func(keys []int) ([]benchmark.User, []error) {
+			users := make([]benchmark.User, len(keys))
+			errors := make([]error, len(keys))
 
-	b.Run("caches", func(b *testing.B) {
-		queries := []int{}
-		for n := 0; n < b.N; n++ {
-			queries = append(queries, rand.Int()%300)
-		}
-		b.ResetTimer()
-		thunks := make([]func() (benchmarkUser, error), b.N)
-		for i := 0; i < b.N; i++ {
-			thunks[i] = dl.Load(ctx, queries[i])
-		}
-
-		for i := 0; i < b.N; i++ {
-			thunks[i]()
-		}
-	})
-
-	b.Run("random spread", func(b *testing.B) {
-		queries := []int{}
-		for n := 0; n < b.N; n++ {
-			queries = append(queries, rand.Int())
-		}
-		thunks := make([]func() (benchmarkUser, error), b.N)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			thunks[i] = dl.Load(ctx, queries[i])
-		}
-
-		for i := 0; i < b.N; i++ {
-			thunks[i]()
-		}
-	})
-
-	b.Run("10 concurently", func(b *testing.B) {
-		queries := []int{}
-		for n := 0; n < b.N*10; n++ {
-			queries = append(queries, rand.Int())
-		}
-		b.ResetTimer()
-		var wg sync.WaitGroup
-		for i := 0; i < 10; i++ {
-			wg.Add(1)
-			go func(i int) {
-				for j := 0; j < b.N; j++ {
-					dl.Load(ctx, queries[i*b.N+j])()
+			for i, key := range keys {
+				if key%100 == 1 {
+					errors[i] = fmt.Errorf("user not found")
+				} else if key%100 == 1 {
+					users[i] = benchmark.User{}
+				} else {
+					users[i] = benchmark.User{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}
 				}
-				wg.Done()
-			}(i)
-		}
-		wg.Wait()
+			}
+			return users, errors
+		},
 	})
+	yckaoDL := yckaodataloader.New[int, benchmark.User, int](ctx, func(_ context.Context, keys []int) []yckaodataloader.Result[benchmark.User] {
+		results := make([]yckaodataloader.Result[benchmark.User], len(keys))
 
-	b.Run("all in one request", func(b *testing.B) {
-		keys := []int{}
-		for n := 0; n < b.N; n++ {
-			keys = append(keys, rand.Int())
+		for i, key := range keys {
+			if key%100 == 1 {
+				results[i] = yckaodataloader.Result[benchmark.User]{Error: fmt.Errorf("user not found")}
+			} else if key%100 == 1 {
+				results[i] = yckaodataloader.Result[benchmark.User]{Value: benchmark.User{}}
+			} else {
+				results[i] = yckaodataloader.Result[benchmark.User]{Value: benchmark.User{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}}
+			}
 		}
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			dl.LoadMany(ctx, keys)()
-		}
-	})
-}
-
-// IntKey implements the Key interface for an int
-type IntKey int
-
-// String is an identity method. Used to implement String interface
-func (k IntKey) String() string { return strconv.Itoa(int(k)) }
-
-// String is an identity method. Used to implement Key Raw
-func (k IntKey) Raw() interface{} { return k }
-
-func BenchmarkDataloadgen(b *testing.B) {
-	ctx := context.Background()
-	dl := dataloadgen.NewLoader(func(_ context.Context, keys []int) ([]benchmarkUser, []error) {
-		users := make([]benchmarkUser, len(keys))
+		return results
+	},
+		yckaodataloader.WithMaxBatchSize[int, benchmark.User, int](100),
+		yckaodataloader.WithBatchScheduleFn[int, benchmark.User, int](yckaodataloader.NewTimeWindowScheduler(500*time.Nanosecond)),
+	)
+	vikstrousDL := dataloadgen.NewLoader(func(_ context.Context, keys []int) ([]benchmark.User, []error) {
+		users := make([]benchmark.User, len(keys))
 		errors := make([]error, len(keys))
 
 		for i, key := range keys {
 			if key%100 == 1 {
 				errors[i] = fmt.Errorf("user not found")
 			} else if key%100 == 1 {
-				users[i] = benchmarkUser{}
+				users[i] = benchmark.User{}
 			} else {
-				users[i] = benchmarkUser{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}
+				users[i] = benchmark.User{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}
 			}
 		}
 		return users, errors
@@ -134,148 +90,256 @@ func BenchmarkDataloadgen(b *testing.B) {
 	)
 
 	b.Run("caches", func(b *testing.B) {
-		queries := []int{}
-		for n := 0; n < b.N; n++ {
-			queries = append(queries, rand.Int()%300)
-		}
-		b.ResetTimer()
-		thunks := make([]func() (benchmarkUser, error), b.N)
-		for i := 0; i < b.N; i++ {
-			thunks[i] = dl.LoadThunk(ctx, queries[i])
-		}
+		b.Run("dataloader", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N; n++ {
+				queries = append(queries, rand.Int()%300)
+			}
+			b.ResetTimer()
+			thunks := make([]func() (benchmark.User, error), b.N)
+			for i := 0; i < b.N; i++ {
+				thunks[i] = dataloaderDL.Load(ctx, queries[i])
+			}
 
-		for i := 0; i < b.N; i++ {
-			thunks[i]()
-		}
+			for i := 0; i < b.N; i++ {
+				thunks[i]()
+			}
+		})
+		b.Run("dataloaden", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N; n++ {
+				queries = append(queries, rand.Int()%300)
+			}
+			b.ResetTimer()
+			thunks := make([]func() (benchmark.User, error), b.N)
+			for i := 0; i < b.N; i++ {
+				thunks[i] = dataloadenDL.LoadThunk(queries[i])
+			}
+
+			for i := 0; i < b.N; i++ {
+				thunks[i]()
+			}
+		})
+		b.Run("yckao_dataloader", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N; n++ {
+				queries = append(queries, rand.Int()%300)
+			}
+			b.ResetTimer()
+			thunks := make([]*yckaodataloader.Thunk[benchmark.User], b.N)
+			for i := 0; i < b.N; i++ {
+				thunks[i] = yckaoDL.Load(ctx, queries[i])
+			}
+
+			for i := 0; i < b.N; i++ {
+				thunks[i].Get(ctx)
+			}
+		})
+		b.Run("dataloadgen", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N; n++ {
+				queries = append(queries, rand.Int()%300)
+			}
+			b.ResetTimer()
+			thunks := make([]func() (benchmark.User, error), b.N)
+			for i := 0; i < b.N; i++ {
+				thunks[i] = vikstrousDL.LoadThunk(ctx, queries[i])
+			}
+
+			for i := 0; i < b.N; i++ {
+				thunks[i]()
+			}
+		})
 	})
 
 	b.Run("random spread", func(b *testing.B) {
-		queries := []int{}
-		for n := 0; n < b.N; n++ {
-			queries = append(queries, rand.Int())
-		}
-		thunks := make([]func() (benchmarkUser, error), b.N)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			thunks[i] = dl.LoadThunk(ctx, queries[i])
-		}
+		b.Run("dataloader", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N; n++ {
+				queries = append(queries, rand.Int())
+			}
+			thunks := make([]func() (benchmark.User, error), b.N)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				thunks[i] = dataloaderDL.Load(ctx, queries[i])
+			}
 
-		for i := 0; i < b.N; i++ {
-			thunks[i]()
-		}
+			for i := 0; i < b.N; i++ {
+				thunks[i]()
+			}
+		})
+		b.Run("dataloaden", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N; n++ {
+				queries = append(queries, rand.Int())
+			}
+			thunks := make([]func() (benchmark.User, error), b.N)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				thunks[i] = dataloadenDL.LoadThunk(queries[i])
+			}
+
+			for i := 0; i < b.N; i++ {
+				thunks[i]()
+			}
+		})
+		b.Run("yckao_dataloader", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N; n++ {
+				queries = append(queries, rand.Int())
+			}
+			thunks := make([]*yckaodataloader.Thunk[benchmark.User], b.N)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				thunks[i] = yckaoDL.Load(ctx, queries[i])
+			}
+
+			for i := 0; i < b.N; i++ {
+				thunks[i].Get(ctx)
+			}
+		})
+		b.Run("dataloadgen", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N; n++ {
+				queries = append(queries, rand.Int())
+			}
+			thunks := make([]func() (benchmark.User, error), b.N)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				thunks[i] = vikstrousDL.LoadThunk(ctx, queries[i])
+			}
+
+			for i := 0; i < b.N; i++ {
+				thunks[i]()
+			}
+		})
 	})
-
 	b.Run("10 concurently", func(b *testing.B) {
-		queries := []int{}
-		for n := 0; n < 10*b.N; n++ {
-			queries = append(queries, rand.Int())
-		}
-		b.ResetTimer()
-		var wg sync.WaitGroup
-		for i := 0; i < 10; i++ {
-			wg.Add(1)
-			go func(i int) {
-				for j := 0; j < b.N; j++ {
-					dl.Load(ctx, queries[j+i*b.N])
-				}
-				wg.Done()
-			}(i)
-		}
-		wg.Wait()
+		b.Run("dataloader", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N*10; n++ {
+				queries = append(queries, rand.Int())
+			}
+			results := make([]benchmark.User, b.N*10)
+			b.ResetTimer()
+			var wg sync.WaitGroup
+			for i := 0; i < 10; i++ {
+				wg.Add(1)
+				go func(i int) {
+					for j := 0; j < b.N; j++ {
+						u, _ := dataloaderDL.Load(ctx, queries[j+i*b.N])()
+						results[j+i*b.N] = u
+					}
+					wg.Done()
+				}(i)
+			}
+			wg.Wait()
+		})
+		b.Run("dataloaden", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < b.N*10; n++ {
+				queries = append(queries, rand.Int())
+			}
+			results := make([]benchmark.User, b.N*10)
+			b.ResetTimer()
+			var wg sync.WaitGroup
+			for i := 0; i < 10; i++ {
+				wg.Add(1)
+				go func(i int) {
+					for j := 0; j < b.N; j++ {
+						u, _ := dataloadenDL.Load(queries[j+i*b.N])
+						results[j+i*b.N] = u
+					}
+					wg.Done()
+				}(i)
+			}
+			wg.Wait()
+		})
+		b.Run("yckao_dataloader", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < 10*b.N; n++ {
+				queries = append(queries, rand.Int())
+			}
+			results := make([]benchmark.User, b.N*10)
+			b.ResetTimer()
+			var wg sync.WaitGroup
+			for i := 0; i < 10; i++ {
+				wg.Add(1)
+				go func(i int) {
+					for j := 0; j < b.N; j++ {
+						u, _ := yckaoDL.Load(ctx, queries[j+i*b.N]).Get(ctx)
+						results[j+i*b.N] = u
+					}
+					wg.Done()
+				}(i)
+			}
+			wg.Wait()
+		})
+		b.Run("dataloadgen", func(b *testing.B) {
+			queries := []int{}
+			for n := 0; n < 10*b.N; n++ {
+				queries = append(queries, rand.Int())
+			}
+			results := make([]benchmark.User, b.N*10)
+			b.ResetTimer()
+			var wg sync.WaitGroup
+			for i := 0; i < 10; i++ {
+				wg.Add(1)
+				go func(i int) {
+					for j := 0; j < b.N; j++ {
+						u, _ := vikstrousDL.Load(ctx, queries[j+i*b.N])
+						results[j+i*b.N] = u
+					}
+					wg.Done()
+				}(i)
+			}
+			wg.Wait()
+		})
 	})
 
 	b.Run("all in one request", func(b *testing.B) {
-		keys := []int{}
-		for n := 0; n < b.N; n++ {
-			keys = append(keys, rand.Int())
-		}
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			dl.LoadAll(ctx, keys)
-		}
-	})
-}
-
-func BenchmarkDataloaden(b *testing.B) {
-	dl := NewUserLoader(UserLoaderConfig{
-		Wait:     500 * time.Nanosecond,
-		MaxBatch: 100,
-		Fetch: func(keys []int) ([]*User, []error) {
-			users := make([]*User, len(keys))
-			errors := make([]error, len(keys))
-
-			for i, key := range keys {
-				if rand.Int()%100 == 1 {
-					errors[i] = fmt.Errorf("user not found")
-				} else if rand.Int()%100 == 1 {
-					users[i] = nil
-				} else {
-					users[i] = &User{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}
+		b.Run("dataloader", func(b *testing.B) {
+			keys := []int{}
+			for n := 0; n < b.N; n++ {
+				keys = append(keys, rand.Int())
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				dataloaderDL.LoadMany(ctx, keys)()
+			}
+		})
+		b.Run("dataloaden", func(b *testing.B) {
+			keys := []int{}
+			for n := 0; n < b.N; n++ {
+				keys = append(keys, rand.Int())
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				dataloadenDL.LoadAll(keys)
+			}
+		})
+		b.Run("yckao_dataloader", func(b *testing.B) {
+			keys := []int{}
+			for n := 0; n < b.N; n++ {
+				keys = append(keys, rand.Int())
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				thunks := yckaoDL.LoadMany(ctx, keys)
+				for _, t := range thunks {
+					t.Get(ctx)
 				}
 			}
-			return users, errors
-		},
-	})
-
-	b.Run("caches", func(b *testing.B) {
-		queries := []int{}
-		for n := 0; n < b.N; n++ {
-			queries = append(queries, rand.Int()%300)
-		}
-		b.ResetTimer()
-		thunks := make([]func() (*User, error), b.N)
-		for i := 0; i < b.N; i++ {
-			thunks[i] = dl.LoadThunk(queries[i])
-		}
-
-		for i := 0; i < b.N; i++ {
-			thunks[i]()
-		}
-	})
-
-	b.Run("random spread", func(b *testing.B) {
-		queries := []int{}
-		for n := 0; n < b.N; n++ {
-			queries = append(queries, rand.Int())
-		}
-		thunks := make([]func() (*User, error), b.N)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			thunks[i] = dl.LoadThunk(queries[i])
-		}
-
-		for i := 0; i < b.N; i++ {
-			thunks[i]()
-		}
-	})
-
-	b.Run("10 concurently", func(b *testing.B) {
-		queries := []int{}
-		for n := 0; n < b.N*10; n++ {
-			queries = append(queries, rand.Int())
-		}
-		b.ResetTimer()
-		var wg sync.WaitGroup
-		for i := 0; i < 10; i++ {
-			wg.Add(1)
-			go func(i int) {
-				for j := 0; j < b.N; j++ {
-					dl.Load(queries[i*b.N+j])
-				}
-				wg.Done()
-			}(i)
-		}
-		wg.Wait()
-	})
-
-	b.Run("all in one request", func(b *testing.B) {
-		keys := []int{}
-		for n := 0; n < b.N; n++ {
-			keys = append(keys, rand.Int())
-		}
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			dl.LoadAll(keys)
-		}
+		})
+		b.Run("dataloadgen", func(b *testing.B) {
+			keys := []int{}
+			for n := 0; n < b.N; n++ {
+				keys = append(keys, rand.Int())
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				vikstrousDL.LoadAll(ctx, keys)
+			}
+		})
 	})
 }
