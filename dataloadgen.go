@@ -238,10 +238,10 @@ func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 			firstContext: ctx,
 		}
 		if l.maxBatch != 0 {
-			batch.contexts = make([]context.Context, 0, l.maxBatch)
-			batch.keys = make([]KeyT, 0, l.maxBatch)
+			batch.contexts = make([]context.Context, 0)
+			batch.keys = make([]KeyT, 0)
 			if l.tracer != nil {
-				batch.spans = make([]trace.Span, 0, l.maxBatch)
+				batch.spans = make([]trace.Span, 0)
 			}
 		}
 		l.batch = batch
