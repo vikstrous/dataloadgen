@@ -64,6 +64,7 @@ The benchmarks in this repo show that this package is faster than all of the abo
 
 <details>
 <summary>Benchmark data as CSV</summary>
+
 ```
 Benchmark,Package,iterations,ns/op,B/op,allocs/op
 init-8,graph-gophers/dataloader,"9,242,047.00",130.50,208.00,3.00
@@ -87,6 +88,7 @@ all_in_one_request-8,vektah/dataloaden,328.00,"3,713,407.00","3,533,086.00","41,
 all_in_one_request-8,yckao/go-dataloader,132.00,"9,060,571.00","4,886,722.00","102,564.00"
 all_in_one_request-8,vikstrous/dataloadgen,375.00,"3,206,175.00","2,518,498.00","41,582.00"
 ```
+
 </details>
 
 ![](init.png)
