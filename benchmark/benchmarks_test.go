@@ -222,7 +222,7 @@ func BenchmarkAll(b *testing.B) {
 			}
 		})
 	})
-	b.Run("10 concurently", func(b *testing.B) {
+	b.Run("10 concurrently", func(b *testing.B) {
 		b.Run("dataloader", func(b *testing.B) {
 			for n := 0; n < b.N*10; n++ {
 				dataloaderDL := newDataloader()

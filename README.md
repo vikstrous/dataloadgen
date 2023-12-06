@@ -56,26 +56,43 @@ func main() {
 
 ## Comparison to others
 
-[dataloaden](https://github.com/vektah/dataloaden) uses code generation and has similar performance
-[dataloader](https://github.com/graph-gophers/dataloader) does not use code generation but has much worse performance and is more difficult to use
+* [dataloaden](https://github.com/vektah/dataloaden) uses code generation and has similar performance
+* [dataloader](https://github.com/graph-gophers/dataloader) does not use code generation but has much worse performance and is more difficult to use
+* [yckao/go-dataloader](https://github.com/yckao/go-dataloader) does not use code generation but has much worse performance and is very similar to dataloader.
 
-Benchmarks show that this package is faster than both of the above and I find it easier to use.
+The benchmarks in this repo show that this package is faster than all of the above and I also find it easier to use.
 
+<details>
+<summary>Benchmark data as CSV</summary>
 ```
-BenchmarkDataloader/caches-8                 4363897               273.6 ns/op           168 B/op          5 allocs/op
-BenchmarkDataloader/random_spread-8          1000000              1308 ns/op             620 B/op         11 allocs/op
-BenchmarkDataloader/10_concurently-8           15818             80064 ns/op           29203 B/op        155 allocs/op
-BenchmarkDataloader/all_in_one_request-8       10000           6886305 ns/op         2575523 B/op      60026 allocs/op
-
-BenchmarkDataloaden/caches-8                19571458                60.74 ns/op           24 B/op          1 allocs/op
-BenchmarkDataloaden/random_spread-8          2477028               653.7 ns/op           302 B/op          5 allocs/op
-BenchmarkDataloaden/10_concurently-8           20932             53285 ns/op            2802 B/op         75 allocs/op
-BenchmarkDataloaden/all_in_one_request-8       10000           1303027 ns/op          487867 B/op      10007 allocs/op
-
-BenchmarkDataloadgen/caches-8               22270087                53.23 ns/op            8 B/op          0 allocs/op
-BenchmarkDataloadgen/random_spread-8         2454928               495.9 ns/op           289 B/op          4 allocs/op
-BenchmarkDataloadgen/10_concurently-8          17260             65339 ns/op            9541 B/op         63 allocs/op
-BenchmarkDataloadgen/all_in_one_request-8      10000            978196 ns/op          573651 B/op          8 allocs/op
+Benchmark,Package,iterations,ns/op,B/op,allocs/op
+init-8,graph-gophers/dataloader,"9,242,047.00",130.50,208.00,3.00
+init-8,vektah/dataloaden,"1,000,000,000.00",0.27,0.00,0.00
+init-8,yckao/go-dataloader,"3,153,999.00",402.10,400.00,10.00
+init-8,vikstrous/dataloadgen,"10,347,595.00",114.90,128.00,3.00
+cached-8,graph-gophers/dataloader,"4,669.00","222,072.00","25,307.00",522.00
+cached-8,vektah/dataloaden,"1,243.00","1,037,044.00","5,234.00",110.00
+cached-8,yckao/go-dataloader,"2,312.00","580,860.00","2,273.00",130.00
+cached-8,vikstrous/dataloadgen,"1,552.00","824,939.00",776.00,15.00
+unique_keys-8,graph-gophers/dataloader,"12,334.00","97,118.00","56,314.00",945.00
+unique_keys-8,vektah/dataloaden,"36,489.00","32,507.00","37,514.00",227.00
+unique_keys-8,yckao/go-dataloader,"8,055.00","133,224.00","50,180.00",747.00
+unique_keys-8,vikstrous/dataloadgen,"42,943.00","27,257.00","22,255.00",230.00
+10_concurrently-8,graph-gophers/dataloader,326.00,"11,119,367.00","5,574,460.00","164,247.00"
+10_concurrently-8,vektah/dataloaden,100.00,"194,627,574.00","898,977.00","19,502.00"
+10_concurrently-8,yckao/go-dataloader,278.00,"10,972,399.00","314,963.00","29,558.00"
+10_concurrently-8,vikstrous/dataloadgen,643.00,"8,249,158.00","43,474.00",806.00
+all_in_one_request-8,graph-gophers/dataloader,28.00,"39,954,324.00","27,475,136.00","158,321.00"
+all_in_one_request-8,vektah/dataloaden,328.00,"3,713,407.00","3,533,086.00","41,368.00"
+all_in_one_request-8,yckao/go-dataloader,132.00,"9,060,571.00","4,886,722.00","102,564.00"
+all_in_one_request-8,vikstrous/dataloadgen,375.00,"3,206,175.00","2,518,498.00","41,582.00"
 ```
+</details>
 
-To run the benchmarks, run `go test -bench=. . -benchmem` from the benchmark directory.
+![](init.png)
+![](cached.png)
+![](unique_keys.png)
+![](10_concurrently.png)
+![](all_in_one_request.png)
+
+To run the benchmarks, run `go test -bench=. . -run BenchmarkAll -benchmem` from the benchmark directory.

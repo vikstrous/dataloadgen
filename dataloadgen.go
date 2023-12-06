@@ -200,7 +200,7 @@ func (l *Loader[KeyT, ValueT]) LoadAllThunk(ctx context.Context, keys []KeyT) fu
 		allNil := true
 		for i, thunk := range thunks {
 			values[i], errors[i] = thunk()
-			if allNil == true && errors[i] != nil {
+			if allNil && errors[i] != nil {
 				allNil = false
 			}
 		}

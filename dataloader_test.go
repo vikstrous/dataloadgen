@@ -19,9 +19,7 @@ func BenchmarkLoaderFromDataloader(b *testing.B) {
 	dl := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		a.Add(len(keys))
 		results = make([]string, 0, len(keys))
-		for _, key := range keys {
-			results = append(results, key)
-		}
+		results = append(results, keys...)
 		return results, nil
 	})
 	b.ResetTimer()
@@ -221,11 +219,9 @@ func TestLoader(t *testing.T) {
 
 		n := 10
 		reqs := []func() (string, error){}
-		keys := []string{}
 		for i := 0; i < n; i++ {
 			key := strconv.Itoa(i)
 			reqs = append(reqs, faultyLoader.LoadThunk(ctx, key))
-			keys = append(keys, key)
 		}
 
 		for _, future := range reqs {
@@ -489,9 +485,7 @@ func IDLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()
-		for _, key := range keys {
-			results = append(results, key)
-		}
+		results = append(results, keys...)
 		return results, nil
 	}, dataloadgen.WithBatchCapacity(max))
 	return identityLoader, &loadCalls
@@ -504,9 +498,7 @@ func BatchOnlyLoader(max int) (*dataloadgen.Loader[string, string], *[][]string)
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()
-		for _, key := range keys {
-			results = append(results, key)
-		}
+		results = append(results, keys...)
 		return results, nil
 	}, dataloadgen.WithBatchCapacity(max)) // dataloadgen.WithClearCacheOnBatch())
 	return identityLoader, &loadCalls
@@ -579,9 +571,7 @@ func NoCacheLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()
-		for _, key := range keys {
-			results = append(results, key)
-		}
+		results = append(results, keys...)
 		return results, nil
 	}, /*dataloadgen.WithCache(cache),*/ dataloadgen.WithBatchCapacity(max))
 	return identityLoader, &loadCalls

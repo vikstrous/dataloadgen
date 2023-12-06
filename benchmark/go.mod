@@ -15,3 +15,5 @@ require (
 	go.opentelemetry.io/otel/trace v1.11.1 // indirect
 	golang.org/x/tools v0.0.0-20190515012406-7d7faa4812bd // indirect
 )
+
+replace github.com/vikstrous/dataloadgen => ../
