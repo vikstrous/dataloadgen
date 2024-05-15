@@ -108,3 +108,16 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("wrong error: %s", errs[2].Error())
 	}
 }
+
+func TestPanic(t *testing.T) {
+	ctx := context.Background()
+	dl := dataloadgen.NewLoader(func(_ context.Context, keys []int) ([]string, []error) {
+		panic("fetch panic")
+	},
+		dataloadgen.WithBatchCapacity(1),
+	)
+	_, err := dl.Load(ctx, 1)
+	if err.Error() != "panic during fetch: fetch panic" {
+		t.Fatalf("wrong error: %s", err.Error())
+	}
+}

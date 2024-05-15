@@ -273,7 +273,7 @@ func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 				}
 			}
 
-			batch.results, batch.errors = l.fetch(batch.firstContext, batch.keys)
+			batch.results, batch.errors = l.safeFetch(batch.firstContext, batch.keys)
 
 			if l.tracer != nil {
 				for _, span := range spans {
@@ -284,6 +284,16 @@ func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 			close(batch.done)
 		}(l)
 	}
+}
+
+func (l *Loader[KeyT, ValueT]) safeFetch(ctx context.Context, keys []KeyT) (values []ValueT, errs []error) {
+	defer func() {
+		panicValue := recover()
+		if panicValue != nil {
+			errs = []error{fmt.Errorf("panic during fetch: %v", panicValue)}
+		}
+	}()
+	return l.fetch(ctx, keys)
 }
 
 // addKeyToBatch will return the location of the key in the batch, if its not found
@@ -305,7 +315,7 @@ func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key K
 				}
 			}
 
-			b.results, b.errors = l.fetch(b.firstContext, b.keys)
+			b.results, b.errors = l.safeFetch(b.firstContext, b.keys)
 
 			if l.tracer != nil {
 				for _, span := range spans {
