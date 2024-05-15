@@ -132,7 +132,7 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 
 		// If the batch function returned the wrong number of responses, return an error to all callers
 		if len(batch.results) != len(batch.keys) {
-			return data, fmt.Errorf("bug in loader: %d values returned for %d keys", len(batch.results), len(batch.keys))
+			return data, fmt.Errorf("bug in fetch function: %d values returned for %d keys", len(batch.results), len(batch.keys))
 		}
 
 		if pos < len(batch.results) {
@@ -140,8 +140,13 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 		}
 
 		var err error
-		if batch.errors != nil {
-			err = batch.errors[pos]
+		if len(batch.errors) != 0 {
+			if pos < len(batch.errors) {
+				err = batch.errors[pos]
+			} else {
+				err = fmt.Errorf("bug in fetch function: %d errors returned for %d keys; last error: %w", len(batch.errors), len(batch.keys), batch.errors[len(batch.errors)-1])
+			}
+
 		}
 
 		return data, err
