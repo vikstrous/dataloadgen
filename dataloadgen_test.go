@@ -2,6 +2,7 @@ package dataloadgen_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 func ExampleLoader() {
 	ctx := context.Background()
+
 	loader := dataloadgen.NewLoader(func(ctx context.Context, keys []string) (ret []int, errs []error) {
 		for _, key := range keys {
 			num, err := strconv.ParseInt(key, 10, 32)
@@ -28,8 +30,24 @@ func ExampleLoader() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(one)
-	// Output: 1
+
+	mappedLoader := dataloadgen.NewLoader(func(ctx context.Context, keys []string) (ret []int, errs []error) {
+		for _, key := range keys {
+			num, err := strconv.ParseInt(key, 10, 32)
+			ret = append(ret, int(num))
+			errs = append(errs, err)
+		}
+		return
+	},
+		dataloadgen.WithBatchCapacity(1),
+		dataloadgen.WithWait(16*time.Millisecond),
+	)
+	two, err := mappedLoader.Load(ctx, "2")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(one, ",", two)
+	// Output: 1 , 2
 }
 
 func TestCache(t *testing.T) {
@@ -42,16 +60,16 @@ func TestCache(t *testing.T) {
 		mu.Unlock()
 
 		results := make([]string, len(keys))
-		errors := make([]error, len(keys))
+		errs := make([]error, len(keys))
 
 		for i, key := range keys {
 			if key%2 == 0 {
-				errors[i] = fmt.Errorf("not found")
+				errs[i] = fmt.Errorf("not found")
 			} else {
 				results[i] = fmt.Sprint(key)
 			}
 		}
-		return results, errors
+		return results, errs
 	},
 		dataloadgen.WithBatchCapacity(5),
 		dataloadgen.WithWait(1*time.Millisecond),
@@ -94,7 +112,8 @@ func TestErrors(t *testing.T) {
 		dataloadgen.WithBatchCapacity(3),
 	)
 	_, err := dl.LoadAll(ctx, []int{1, 2, 3})
-	errs := err.(dataloadgen.ErrorSlice)
+	var errs dataloadgen.ErrorSlice
+	errors.As(err, &errs)
 	if len(errs) != 3 {
 		t.Fatalf("wrong number of errors: %d", len(errs))
 	}
@@ -117,7 +136,35 @@ func TestPanic(t *testing.T) {
 		dataloadgen.WithBatchCapacity(1),
 	)
 	_, err := dl.Load(ctx, 1)
-	if err.Error() != "panic during fetch: fetch panic" {
+	if err != nil && err.Error() != "panic during fetch: fetch panic" {
 		t.Fatalf("wrong error: %s", err.Error())
+	}
+}
+
+func TestMappedLoader(t *testing.T) {
+	ctx := context.Background()
+	dl := dataloadgen.NewMappedLoader(func(_ context.Context, keys []string) (map[string]*string, map[string]error) {
+		one := "1"
+		results := map[string]*string{"1": &one}
+		errs := map[string]error{"3": errors.New("not found error")}
+		return results, errs
+	})
+
+	thunkOne := dl.LoadThunk(ctx, "1")
+	thunkTwo := dl.LoadThunk(ctx, "2")
+	thunkThree := dl.LoadThunk(ctx, "3")
+
+	one, _ := thunkOne()
+	two, errTwo := thunkTwo()
+	_, errThree := thunkThree()
+
+	if *one != "1" {
+		t.Fatal("wrong value returned for '1':", *one)
+	}
+	if two != nil || errTwo != nil {
+		t.Fatalf("wrong value/err returned for '2'. Value: %v Err: %v", two, errTwo)
+	}
+	if errThree == nil || errThree.Error() != "not found error" {
+		t.Fatal("wrong error:", errThree)
 	}
 }
