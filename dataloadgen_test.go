@@ -31,11 +31,13 @@ func ExampleLoader() {
 		panic(err)
 	}
 
-	mappedLoader := dataloadgen.NewLoader(func(ctx context.Context, keys []string) (ret []int, errs []error) {
+	mappedLoader := dataloadgen.NewMappedLoader(func(ctx context.Context, keys []string) (ret map[string]int, errs map[string]error) {
+		ret = make(map[string]int, len(keys))
+		errs = make(map[string]error, len(keys))
 		for _, key := range keys {
 			num, err := strconv.ParseInt(key, 10, 32)
-			ret = append(ret, int(num))
-			errs = append(errs, err)
+			ret[key] = int(num)
+			errs[key] = err
 		}
 		return
 	},
@@ -143,11 +145,11 @@ func TestPanic(t *testing.T) {
 
 func TestMappedLoader(t *testing.T) {
 	ctx := context.Background()
-	dl := dataloadgen.NewMappedLoader(func(_ context.Context, keys []string) (map[string]*string, map[string]error) {
+	dl := dataloadgen.NewMappedLoader(func(_ context.Context, keys []string) (res map[string]*string, errs map[string]error) {
 		one := "1"
-		results := map[string]*string{"1": &one}
-		errs := map[string]error{"3": errors.New("not found error")}
-		return results, errs
+		res = map[string]*string{"1": &one}
+		errs = map[string]error{"3": errors.New("not found error")}
+		return res, errs
 	})
 
 	thunkOne := dl.LoadThunk(ctx, "1")
