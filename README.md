@@ -43,6 +43,8 @@ func fetchFn(ctx context.Context, keys []string) (ret []int, errs []error) {
     return ret, errs
 }
 func mappedFetchFn(ctx context.Context, keys []string) (ret map[string]int, errs map[string]error) {
+	ret = make(map[string]int, len(keys))
+	errs = make(map[string]error, len(keys))
     for _, key := range keys {
         num, err := strconv.ParseInt(key, 10, 32)
         ret[key] = int(num)
