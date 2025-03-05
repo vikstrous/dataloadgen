@@ -9,7 +9,7 @@ It works as follows:
 * Each of many concurrently executing graphql resolver functions call Load() on the Loader object with different keys. Let's say K1, K2, K3
 * Each call to Load() with a new key is delayed slightly (a few milliseconds) so that the Loader can load them together.
 * The customizable fetch function of the loader takes a list of keys and loads data for all of them in a single batched request to the data storage layer. It might send `[K1,K2,K3]` and get back `[V1,V2,V3]`.
-* The Loader takes case of sending the right result to the right caller and the result is cached for the duration of the graphql request.
+* The Loader takes care of sending the right result to the right caller and the result is cached for the duration of the graphql request.
 
 Usage:
 
