@@ -41,7 +41,7 @@ func fetchFn(ctx context.Context, keys []string) (ret []int, errs []error) {
         ret = append(ret, int(num))
         errs = append(errs, err)
     }
-    return ret, errs
+    return
 }
 func mappedFetchFn(ctx context.Context, keys []string) (ret map[string]int, errs map[string]error) {
 	ret = make(map[string]int, len(keys))
@@ -51,7 +51,7 @@ func mappedFetchFn(ctx context.Context, keys []string) (ret map[string]int, errs
         ret[key] = int(num)
         errs[key] = err
     }
-    return ret, errs
+    return
 }
 
 func main() {
