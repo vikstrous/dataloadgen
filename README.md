@@ -8,8 +8,9 @@ It works as follows:
 * A Loader object is created per graphql request.
 * Each of many concurrently executing graphql resolver functions call `Load()` on the Loader object with different keys. Let's say `K1`, `K2`, `K3`
 * Each call to `Load()` with a new key is delayed slightly (a few milliseconds) so that the Loader can load them together.
-* The customizable `fetch` function of the loader takes a list of keys and loads data for all of them in a single batched request to the data storage layer. It might send `[K1,K2,K3]` and get back `[V1,V2,V3]`. Alternatively, a mappedFetch function of the loader takes a list of keys and returns a map instead of a list. It might send `[K1, K2, K3]` and get back `{K1: V1, K2: V2, K3: V3}`.
-* The Loader takes case of sending the right result to the right caller and the result is cached for the duration of the graphql request.
+* The customizable `fetch` function of the loader takes a list of keys and loads data for all of them in a single batched request to the data storage layer. It might send `[K1,K2,K3]` and get back `[V1,V2,V3]`. The order of the keys must match the order of the values.
+  * Alternatively, the `mappedFetch` function of the loader takes a list of keys and returns a map instead of a list. It might send `[K1, K2, K3]` and get back `{K1: V1, K2: V2, K3: V3}`.
+* The Loader takes care of sending the right result to the right caller and the result is cached for the duration of the graphql request.
 
 > [!NOTE]
 > The `fetch` method expect the returned list to correspond to the provided keys in the same order. Alternatively  the `mappedFetch` can be used which allows returning a map, ensuring correct ordering and easy handling of nil values.
