@@ -90,7 +90,7 @@ func newVikstrous() *dataloadgen.Loader[int, benchmark.User] {
 }
 
 func newVikstrousMapped() *dataloadgen.Loader[int, benchmark.User] {
-	return dataloadgen.NewMappedLoader(func(_ context.Context, keys []int) (map[int]benchmark.User, map[int]error) {
+	return dataloadgen.NewMappedLoader(func(_ context.Context, keys []int) (map[int]benchmark.User, error) {
 		users := make(map[int]benchmark.User, len(keys))
 		errors := make(map[int]error, len(keys))
 
@@ -101,7 +101,7 @@ func newVikstrousMapped() *dataloadgen.Loader[int, benchmark.User] {
 				users[key] = benchmark.User{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}
 			}
 		}
-		return users, errors
+		return users, dataloadgen.MappedFetchError[int](errors)
 	},
 		dataloadgen.WithBatchCapacity(100),
 		dataloadgen.WithWait(500*time.Nanosecond),

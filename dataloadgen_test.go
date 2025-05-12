@@ -31,14 +31,15 @@ func ExampleLoader() {
 		panic(err)
 	}
 
-	mappedLoader := dataloadgen.NewMappedLoader(func(ctx context.Context, keys []string) (ret map[string]int, errs map[string]error) {
+	mappedLoader := dataloadgen.NewMappedLoader(func(ctx context.Context, keys []string) (ret map[string]int, err error) {
 		ret = make(map[string]int, len(keys))
-		errs = make(map[string]error, len(keys))
+		errs := make(map[string]error, len(keys))
 		for _, key := range keys {
 			num, err := strconv.ParseInt(key, 10, 32)
 			ret[key] = int(num)
 			errs[key] = err
 		}
+		err = dataloadgen.MappedFetchError[string](errs)
 		return
 	},
 		dataloadgen.WithBatchCapacity(1),
@@ -145,11 +146,11 @@ func TestPanic(t *testing.T) {
 
 func TestMappedLoader(t *testing.T) {
 	ctx := context.Background()
-	dl := dataloadgen.NewMappedLoader(func(_ context.Context, keys []string) (res map[string]*string, errs map[string]error) {
+	dl := dataloadgen.NewMappedLoader(func(_ context.Context, keys []string) (res map[string]*string, err error) {
 		one := "1"
 		res = map[string]*string{"1": &one}
-		errs = map[string]error{"3": errors.New("not found error")}
-		return res, errs
+		err = dataloadgen.MappedFetchError[string](map[string]error{"3": errors.New("not found error")})
+		return
 	})
 
 	thunkOne := dl.LoadThunk(ctx, "1")
@@ -168,5 +169,33 @@ func TestMappedLoader(t *testing.T) {
 	}
 	if errThree == nil || errThree.Error() != "not found error" {
 		t.Fatal("wrong error:", errThree)
+	}
+}
+
+func TestMappedLoaderSingleError(t *testing.T) {
+	ctx := context.Background()
+	dl := dataloadgen.NewMappedLoader(func(_ context.Context, keys []string) (res map[string]*string, err error) {
+		err = errors.New("something went wrong")
+		return
+	})
+
+	thunkOne := dl.LoadThunk(ctx, "1")
+	thunkTwo := dl.LoadThunk(ctx, "2")
+	thunkThree := dl.LoadThunk(ctx, "3")
+
+	_, errOne := thunkOne()
+	_, errTwo := thunkTwo()
+	_, errThree := thunkThree()
+
+	if errOne != nil && errTwo != nil && errThree != nil {
+		if errors.Is(errTwo, errOne) && errors.Is(errThree, errTwo) {
+			if errOne.Error() != "something went wrong" {
+				t.Fatalf("Unexpected error message: %s", errOne.Error())
+			}
+		} else {
+			t.Fatalf("All errors should be equal, instead got: %s, %s, %s", errOne, errTwo, errThree)
+		}
+	} else {
+		t.Fatalf("All errors should be non-nil, instead got: %s, %s, %s", errOne, errTwo, errThree)
 	}
 }

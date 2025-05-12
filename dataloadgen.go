@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,22 +53,41 @@ func NewLoader[KeyT comparable, ValueT any](fetch func(ctx context.Context, keys
 }
 
 // NewMappedLoader creates a new GenericLoader given a mappedFetch, wait and maxBatch
-func NewMappedLoader[KeyT comparable, ValueT any](mappedFetch func(ctx context.Context, keys []KeyT) (map[KeyT]ValueT, map[KeyT]error), options ...Option) *Loader[KeyT, ValueT] {
+func NewMappedLoader[KeyT comparable, ValueT any](mappedFetch func(ctx context.Context, keys []KeyT) (map[KeyT]ValueT, error), options ...Option) *Loader[KeyT, ValueT] {
 	return NewLoader(convertMappedFetch(mappedFetch), options...)
 }
 
 // convertMappedFetch accepts a fetcher method that returns maps, and converts it to a fetcher that returns lists.
-func convertMappedFetch[KeyT comparable, ValueT any](mappedFetch func(ctx context.Context, keys []KeyT) (map[KeyT]ValueT, map[KeyT]error)) func(ctx context.Context, keys []KeyT) ([]ValueT, []error) {
+func convertMappedFetch[KeyT comparable, ValueT any](mappedFetch func(ctx context.Context, keys []KeyT) (map[KeyT]ValueT, error)) func(ctx context.Context, keys []KeyT) ([]ValueT, []error) {
 	return func(ctx context.Context, keys []KeyT) ([]ValueT, []error) {
-		mappedResults, mappedErrs := mappedFetch(ctx, keys)
+		mappedResults, err := mappedFetch(ctx, keys)
+		var mfe MappedFetchError[KeyT]
+		isMappedFetchError := errors.As(err, &mfe)
+
 		var values = make([]ValueT, len(keys))
 		var errs = make([]error, len(keys))
 		for i, key := range keys {
 			values[i] = mappedResults[key]
-			errs[i] = mappedErrs[key]
+			if isMappedFetchError {
+				errs[i] = mfe[key]
+			} else {
+				errs[i] = err
+			}
 		}
 		return values, errs
 	}
+}
+
+type MappedFetchError[KeyT comparable] map[KeyT]error
+
+func (e MappedFetchError[KeyT]) Error() string {
+	var errSlice = make([]string, len(e))
+	i := 0
+	for k, v := range e {
+		errSlice[i] = fmt.Sprint(k, ": ", v)
+		i++
+	}
+	return fmt.Sprint("Mapped errors: [", strings.Join(errSlice, ", "), "]")
 }
 
 type loaderConfig struct {
