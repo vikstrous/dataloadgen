@@ -89,6 +89,25 @@ func newVikstrous() *dataloadgen.Loader[int, benchmark.User] {
 	)
 }
 
+func newVikstrousMapped() *dataloadgen.Loader[int, benchmark.User] {
+	return dataloadgen.NewMappedLoader(func(_ context.Context, keys []int) (map[int]benchmark.User, error) {
+		users := make(map[int]benchmark.User, len(keys))
+		errors := make(map[int]error, len(keys))
+
+		for _, key := range keys {
+			if key%100 == 1 {
+				errors[key] = fmt.Errorf("user not found")
+			} else {
+				users[key] = benchmark.User{ID: strconv.Itoa(key), Name: "user " + strconv.Itoa(key)}
+			}
+		}
+		return users, dataloadgen.MappedFetchError[int](errors)
+	},
+		dataloadgen.WithBatchCapacity(100),
+		dataloadgen.WithWait(500*time.Nanosecond),
+	)
+}
+
 func BenchmarkAll(b *testing.B) {
 	ctx := context.Background()
 
@@ -113,6 +132,11 @@ func BenchmarkAll(b *testing.B) {
 				newVikstrous()
 			}
 		})
+		b.Run("dataloadgen_mapped", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				newVikstrousMapped()
+			}
+		})
 	})
 
 	b.Run("cached", func(b *testing.B) {
@@ -124,7 +148,7 @@ func BenchmarkAll(b *testing.B) {
 					thunks[i] = dataloaderDL.Load(ctx, 1)
 				}
 				for i := 0; i < 100; i++ {
-					thunks[i]()
+					_, _ = thunks[i]()
 				}
 			}
 		})
@@ -137,7 +161,7 @@ func BenchmarkAll(b *testing.B) {
 				}
 
 				for i := 0; i < 100; i++ {
-					thunks[i]()
+					_, _ = thunks[i]()
 				}
 			}
 		})
@@ -150,7 +174,7 @@ func BenchmarkAll(b *testing.B) {
 				}
 
 				for i := 0; i < 100; i++ {
-					thunks[i].Get(ctx)
+					_, _ = thunks[i].Get(ctx)
 				}
 			}
 		})
@@ -163,7 +187,20 @@ func BenchmarkAll(b *testing.B) {
 				}
 
 				for i := 0; i < 100; i++ {
-					thunks[i]()
+					_, _ = thunks[i]()
+				}
+			}
+		})
+		b.Run("dataloadgen_mapped", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				vikstrousDL := newVikstrousMapped()
+				thunks := make([]func() (benchmark.User, error), 100)
+				for i := 0; i < 100; i++ {
+					thunks[i] = vikstrousDL.LoadThunk(ctx, 1)
+				}
+
+				for i := 0; i < 100; i++ {
+					_, _ = thunks[i]()
 				}
 			}
 		})
@@ -178,7 +215,7 @@ func BenchmarkAll(b *testing.B) {
 					thunks[i] = dataloaderDL.Load(ctx, i)
 				}
 				for i := 0; i < 100; i++ {
-					thunks[i]()
+					_, _ = thunks[i]()
 				}
 			}
 		})
@@ -191,7 +228,7 @@ func BenchmarkAll(b *testing.B) {
 				}
 
 				for i := 0; i < 100; i++ {
-					thunks[i]()
+					_, _ = thunks[i]()
 				}
 			}
 		})
@@ -204,7 +241,7 @@ func BenchmarkAll(b *testing.B) {
 				}
 
 				for i := 0; i < 100; i++ {
-					thunks[i].Get(ctx)
+					_, _ = thunks[i].Get(ctx)
 				}
 			}
 		})
@@ -217,7 +254,20 @@ func BenchmarkAll(b *testing.B) {
 				}
 
 				for i := 0; i < 100; i++ {
-					thunks[i]()
+					_, _ = thunks[i]()
+				}
+			}
+		})
+		b.Run("dataloadgen_mapped", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				vikstrousDL := newVikstrousMapped()
+				thunks := make([]func() (benchmark.User, error), 100)
+				for i := 0; i < 100; i++ {
+					thunks[i] = vikstrousDL.LoadThunk(ctx, i)
+				}
+
+				for i := 0; i < 100; i++ {
+					_, _ = thunks[i]()
 				}
 			}
 		})
@@ -295,11 +345,29 @@ func BenchmarkAll(b *testing.B) {
 				wg.Wait()
 			}
 		})
+		b.Run("dataloadgen_mapped", func(b *testing.B) {
+			for n := 0; n < b.N*10; n++ {
+				vikstrousDL := newVikstrousMapped()
+				results := make([]benchmark.User, 10)
+				var wg sync.WaitGroup
+				for i := 0; i < 10; i++ {
+					wg.Add(1)
+					go func(i int) {
+						for j := 0; j < b.N; j++ {
+							u, _ := vikstrousDL.Load(ctx, i)
+							results[i] = u
+						}
+						wg.Done()
+					}(i)
+				}
+				wg.Wait()
+			}
+		})
 	})
 
 	b.Run("all in one request", func(b *testing.B) {
 		b.Run("dataloader", func(b *testing.B) {
-			keys := []int{}
+			var keys []int
 			for n := 0; n < 10000; n++ {
 				keys = append(keys, n)
 			}
@@ -310,7 +378,7 @@ func BenchmarkAll(b *testing.B) {
 			}
 		})
 		b.Run("dataloaden", func(b *testing.B) {
-			keys := []int{}
+			var keys []int
 			for n := 0; n < 10000; n++ {
 				keys = append(keys, n)
 			}
@@ -321,7 +389,7 @@ func BenchmarkAll(b *testing.B) {
 			}
 		})
 		b.Run("yckao_dataloader", func(b *testing.B) {
-			keys := []int{}
+			var keys []int
 			for n := 0; n < 10000; n++ {
 				keys = append(keys, n)
 			}
@@ -330,19 +398,30 @@ func BenchmarkAll(b *testing.B) {
 				yckaoDL := newYckao()
 				thunks := yckaoDL.LoadMany(ctx, keys)
 				for _, t := range thunks {
-					t.Get(ctx)
+					_, _ = t.Get(ctx)
 				}
 			}
 		})
 		b.Run("dataloadgen", func(b *testing.B) {
-			keys := []int{}
+			var keys []int
 			for n := 0; n < 10000; n++ {
 				keys = append(keys, n)
 			}
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				vikstrousDL := newVikstrous()
-				vikstrousDL.LoadAll(ctx, keys)
+				_, _ = vikstrousDL.LoadAll(ctx, keys)
+			}
+		})
+		b.Run("dataloadgen_mapped", func(b *testing.B) {
+			var keys []int
+			for n := 0; n < 10000; n++ {
+				keys = append(keys, n)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				vikstrousDL := newVikstrousMapped()
+				_, _ = vikstrousDL.LoadAll(ctx, keys)
 			}
 		})
 	})

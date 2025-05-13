@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
-	trace "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Option allows for configuration of loader fields.
@@ -49,6 +50,44 @@ func NewLoader[KeyT comparable, ValueT any](fetch func(ctx context.Context, keys
 		thunkCache:   map[KeyT]func() (ValueT, error){},
 	}
 	return l
+}
+
+// NewMappedLoader creates a new GenericLoader given a mappedFetch, wait and maxBatch
+func NewMappedLoader[KeyT comparable, ValueT any](mappedFetch func(ctx context.Context, keys []KeyT) (map[KeyT]ValueT, error), options ...Option) *Loader[KeyT, ValueT] {
+	return NewLoader(convertMappedFetch(mappedFetch), options...)
+}
+
+// convertMappedFetch accepts a fetcher method that returns maps, and converts it to a fetcher that returns lists.
+func convertMappedFetch[KeyT comparable, ValueT any](mappedFetch func(ctx context.Context, keys []KeyT) (map[KeyT]ValueT, error)) func(ctx context.Context, keys []KeyT) ([]ValueT, []error) {
+	return func(ctx context.Context, keys []KeyT) ([]ValueT, []error) {
+		mappedResults, err := mappedFetch(ctx, keys)
+		var mfe MappedFetchError[KeyT]
+		isMappedFetchError := errors.As(err, &mfe)
+
+		var values = make([]ValueT, len(keys))
+		var errs = make([]error, len(keys))
+		for i, key := range keys {
+			values[i] = mappedResults[key]
+			if isMappedFetchError {
+				errs[i] = mfe[key]
+			} else {
+				errs[i] = err
+			}
+		}
+		return values, errs
+	}
+}
+
+type MappedFetchError[KeyT comparable] map[KeyT]error
+
+func (e MappedFetchError[KeyT]) Error() string {
+	var errSlice = make([]string, len(e))
+	i := 0
+	for k, v := range e {
+		errSlice[i] = fmt.Sprint(k, ": ", v)
+		i++
+	}
+	return fmt.Sprint("Mapped errors: [", strings.Join(errSlice, ", "), "]")
 }
 
 type loaderConfig struct {
@@ -177,18 +216,18 @@ func (l *Loader[KeyT, ValueT]) LoadAll(ctx context.Context, keys []KeyT) ([]Valu
 	}
 
 	values := make([]ValueT, len(keys))
-	errors := make([]error, len(keys))
+	errs := make([]error, len(keys))
 	allNil := true
 	for i, thunk := range thunks {
-		values[i], errors[i] = thunk()
-		if errors[i] != nil {
+		values[i], errs[i] = thunk()
+		if errs[i] != nil {
 			allNil = false
 		}
 	}
 	if allNil {
 		return values, nil
 	}
-	return values, ErrorSlice(errors)
+	return values, ErrorSlice(errs)
 }
 
 // LoadAllThunk returns a function that when called will block waiting for a ValueT.
@@ -201,18 +240,18 @@ func (l *Loader[KeyT, ValueT]) LoadAllThunk(ctx context.Context, keys []KeyT) fu
 	}
 	return func() ([]ValueT, error) {
 		values := make([]ValueT, len(keys))
-		errors := make([]error, len(keys))
+		errs := make([]error, len(keys))
 		allNil := true
 		for i, thunk := range thunks {
-			values[i], errors[i] = thunk()
-			if allNil && errors[i] != nil {
+			values[i], errs[i] = thunk()
+			if allNil && errs[i] != nil {
 				allNil = false
 			}
 		}
 		if allNil {
 			return values, nil
 		}
-		return values, ErrorSlice(errors)
+		return values, ErrorSlice(errs)
 	}
 }
 
@@ -296,7 +335,7 @@ func (l *Loader[KeyT, ValueT]) safeFetch(ctx context.Context, keys []KeyT) (valu
 	return l.fetch(ctx, keys)
 }
 
-// addKeyToBatch will return the location of the key in the batch, if its not found
+// addKeyToBatch will return the location of the key in the batch, if it's not found
 // it will add the key to the batch
 func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key KeyT) int {
 	pos := len(b.keys)
