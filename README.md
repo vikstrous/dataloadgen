@@ -13,7 +13,7 @@ It works as follows:
 * The Loader takes care of sending the right result to the right caller and the result is cached for the duration of the graphql request.
 
 > [!NOTE]
-> The `fetch` method expect the returned list to correspond to the provided keys in the same order. Alternatively  the `mappedFetch` can be used which allows returning a map, ensuring correct ordering and easy handling of nil values.
+> The `fetch` method expects the returned list to correspond to the provided keys in the same order. Alternatively, the `mappedFetch` allows returning a map, ensuring correct ordering and automatic creation of the `ErrNotFound` error for missing values.
 
 Usage:
 
