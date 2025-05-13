@@ -67,7 +67,14 @@ func convertMappedFetch[KeyT comparable, ValueT any](mappedFetch func(ctx contex
 		var values = make([]ValueT, len(keys))
 		var errs = make([]error, len(keys))
 		for i, key := range keys {
-			values[i] = mappedResults[key]
+			var ok bool
+			if mappedResults != nil {
+				values[i], ok = mappedResults[key]
+			}
+			if !ok || mappedResults == nil {
+				errs[i] = ErrNotFound
+				continue
+			}
 			if isMappedFetchError {
 				errs[i] = mfe[key]
 			} else {
@@ -193,6 +200,9 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 	l.thunkCache[key] = thunk
 	return thunk
 }
+
+// ErrNotFound is generated for you when using NewMappedLoader and not returning any data for a given key
+var ErrNotFound = errors.New("dataloadgen: not found")
 
 // ErrorSlice represents a list of errors that contains at least one error
 type ErrorSlice []error

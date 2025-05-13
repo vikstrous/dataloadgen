@@ -199,3 +199,22 @@ func TestMappedLoaderSingleError(t *testing.T) {
 		t.Fatalf("All errors should be non-nil, instead got: %s, %s, %s", errOne, errTwo, errThree)
 	}
 }
+
+func TestMappedLoaderNotFoundError(t *testing.T) {
+	ctx := context.Background()
+	dl := dataloadgen.NewMappedLoader(func(_ context.Context, keys []string) (map[string]*string, error) {
+		return nil, nil
+	})
+	_, err := dl.Load(ctx, "1")
+	if !errors.Is(err, dataloadgen.ErrNotFound) {
+		t.Fatalf("Wrong error returned: %T", err)
+	}
+
+	dl2 := dataloadgen.NewMappedLoader(func(_ context.Context, keys []string) (map[string]*string, error) {
+		return map[string]*string{}, nil
+	})
+	_, err = dl2.Load(ctx, "1")
+	if !errors.Is(err, dataloadgen.ErrNotFound) {
+		t.Fatalf("Wrong error returned: %T", err)
+	}
+}
