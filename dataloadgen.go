@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -317,7 +318,9 @@ func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 
 			if l.tracer != nil {
 				for _, ctx := range ctxs {
-					_, span := l.tracer.Start(ctx, "dataloadgen.fetch.timelimit")
+					_, span := l.tracer.Start(ctx, "dataloadgen.fetch.timelimit",
+						trace.WithAttributes(
+							attribute.Int64("dataloadgen.keys", int64(len(batch.keys)))))
 					defer span.End()
 				}
 			}
@@ -359,7 +362,9 @@ func (l *Loader[KeyT, ValueT]) addKeyToBatch(b *loaderBatch[KeyT, ValueT], key K
 		go func(l *Loader[KeyT, ValueT], ctxs []context.Context) {
 			if l.tracer != nil {
 				for _, ctx := range ctxs {
-					_, span := l.tracer.Start(ctx, "dataloadgen.fetch.keylimit")
+					_, span := l.tracer.Start(ctx, "dataloadgen.fetch.keylimit",
+						trace.WithAttributes(
+							attribute.Int64("dataloadgen.keys", int64(len(b.keys)))))
 					defer span.End()
 				}
 			}
