@@ -164,7 +164,7 @@ func TestMappedLoader(t *testing.T) {
 	if *one != "1" {
 		t.Fatal("wrong value returned for '1':", *one)
 	}
-	if two != nil || errTwo != nil {
+	if two != nil || !errors.Is(errTwo, dataloadgen.ErrNotFound) {
 		t.Fatalf("wrong value/err returned for '2'. Value: %v Err: %v", two, errTwo)
 	}
 	if errThree == nil || errThree.Error() != "not found error" {
