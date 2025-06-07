@@ -74,18 +74,22 @@ func convertMappedFetch[KeyT comparable, ValueT any](mappedFetch func(ctx contex
 			}
 
 			// Handle different error scenarios
-			if isMappedFetchError {
-				// If we have a MappedFetchError, use the specific error for this key
-				// If the key is not in the error map, the error remains nil
-				errs[i] = mfe[key]
-			} else if err != nil {
-				// If we have a single error, apply it to all keys
+			if err != nil && !isMappedFetchError {
+				// If we have a single error (not MappedFetchError), apply it to all keys
 				errs[i] = err
+			} else if isMappedFetchError {
+				// If we have a MappedFetchError, check if this key has a specific error
+				if keyErr, hasError := mfe[key]; hasError {
+					errs[i] = keyErr
+				} else if !ok {
+					// Key is missing from results and has no error in MappedFetchError
+					errs[i] = ErrNotFound
+				}
 			} else if !ok {
-				// If there's no error at all but the key is not found
+				// No error at all but the key is not found
 				errs[i] = ErrNotFound
 			}
-			// If ok is true, errs[i] remains nil
+			// If ok is true and no error, errs[i] remains nil
 		}
 		return values, errs
 	}
