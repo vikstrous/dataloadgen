@@ -376,13 +376,12 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("allows clearAll values in cache", func(t *testing.T) {
-		t.Skip("not supported yet")
 		t.Parallel()
 		identityLoader, loadCalls := IDLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
 
-		// identityLoader.ClearAll()
+		identityLoader.ClearAll()
 
 		future1 := identityLoader.LoadThunk(ctx, "1")
 		future2 := identityLoader.LoadThunk(ctx, "A")
