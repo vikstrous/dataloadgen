@@ -286,6 +286,13 @@ func (l *Loader[KeyT, ValueT]) Clear(key KeyT) {
 	l.mu.Unlock()
 }
 
+// ClearAll clears all values from the cache
+func (l *Loader[KeyT, ValueT]) ClearAll() {
+	l.mu.Lock()
+	l.thunkCache = make(map[KeyT]func() (ValueT, error))
+	l.mu.Unlock()
+}
+
 func (l *Loader[KeyT, ValueT]) startBatch(ctx context.Context) {
 	if l.batch == nil {
 		batch := &loaderBatch[KeyT, ValueT]{
