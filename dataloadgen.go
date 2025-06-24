@@ -226,6 +226,11 @@ func (e ErrorSlice) Error() string {
 	return combinedErr.Error()
 }
 
+// Unwrap implements support for errors.Is and errors.As
+func (e ErrorSlice) Unwrap() error {
+	return errors.Join([]error(e)...)
+}
+
 // LoadAll fetches many keys at once. It will be broken into appropriate sized
 // sub batches depending on how the loader is configured
 func (l *Loader[KeyT, ValueT]) LoadAll(ctx context.Context, keys []KeyT) ([]ValueT, error) {

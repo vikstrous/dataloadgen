@@ -131,6 +131,19 @@ func TestErrors(t *testing.T) {
 	}
 }
 
+func TestErrorSliceUnwrap(t *testing.T) {
+	ctx := context.Background()
+	dl := dataloadgen.NewLoader(func(_ context.Context, keys []int) ([]string, []error) {
+		return []string{"1", "2", "3"}, []error{fmt.Errorf("error 1"), context.Canceled}
+	},
+		dataloadgen.WithBatchCapacity(3),
+	)
+	_, err := dl.LoadAll(ctx, []int{1, 2, 3})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error does not unwrap: %s", err)
+	}
+}
+
 func TestPanic(t *testing.T) {
 	ctx := context.Background()
 	dl := dataloadgen.NewLoader(func(_ context.Context, keys []int) ([]string, []error) {
