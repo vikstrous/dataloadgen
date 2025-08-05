@@ -36,6 +36,15 @@ func WithTracer(tracer trace.Tracer) Option {
 	}
 }
 
+// WithoutCache disables the caching of the loader.
+// Every load will result in fresh data from the fetch function.
+// Priming the cache is a no-op when using `WithoutCache`.
+func WithoutCache() Option {
+	return func(l *loaderConfig) {
+		l.cacheDisabled = true
+	}
+}
+
 // NewLoader creates a new GenericLoader given a fetch, wait, and maxBatch
 func NewLoader[KeyT comparable, ValueT any](fetch func(ctx context.Context, keys []KeyT) ([]ValueT, []error), options ...Option) *Loader[KeyT, ValueT] {
 	config := &loaderConfig{
@@ -113,6 +122,9 @@ type loaderConfig struct {
 
 	// this will limit the maximum number of keys to send in one batch, 0 = no limit
 	maxBatch int
+
+	// whether or not to use the cache
+	cacheDisabled bool
 
 	tracer trace.Tracer
 }
@@ -207,7 +219,9 @@ func (l *Loader[KeyT, ValueT]) LoadThunk(ctx context.Context, key KeyT) func() (
 
 		return data, err
 	}
-	l.thunkCache[key] = thunk
+	if !l.cacheDisabled {
+		l.thunkCache[key] = thunk
+	}
 	return thunk
 }
 
@@ -283,7 +297,12 @@ func (l *Loader[KeyT, ValueT]) LoadAllThunk(ctx context.Context, keys []KeyT) fu
 // Prime the cache with the provided key and value. If the key already exists, no change is made
 // and false is returned.
 // (To forcefully prime the cache, clear the key first with loader.Clear(key).Prime(key, value).)
+// Note: When using `WithoutCache`, this will not cache the value and will always return false.
 func (l *Loader[KeyT, ValueT]) Prime(key KeyT, value ValueT) bool {
+	if l.cacheDisabled {
+		return false
+	}
+
 	l.mu.Lock()
 	var found bool
 	if _, found = l.thunkCache[key]; !found {
