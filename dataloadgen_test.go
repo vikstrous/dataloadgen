@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -104,6 +105,150 @@ func TestCache(t *testing.T) {
 		if r != "1" {
 			t.Fatal("wrong data fetched", r)
 		}
+	}
+}
+
+// TestWithoutCache tests that the loader does not cache and reuse the results of a request.
+func TestWithoutCache(t *testing.T) {
+	ctx := context.Background()
+	var fetches [][]int
+	var mu sync.Mutex
+	dl := dataloadgen.NewLoader(func(_ context.Context, keys []int) ([]string, []error) {
+		mu.Lock()
+		fetches = append(fetches, keys)
+		mu.Unlock()
+
+		results := make([]string, len(keys))
+		errs := make([]error, len(keys))
+
+		for i, key := range keys {
+			if key%2 == 0 {
+				errs[i] = fmt.Errorf("not found")
+			} else {
+				results[i] = fmt.Sprint(key)
+			}
+		}
+		return results, errs
+	},
+		dataloadgen.WithBatchCapacity(5),
+		dataloadgen.WithWait(1*time.Millisecond),
+		dataloadgen.WithoutCache(),
+	)
+
+	for i := 0; i < 2; i++ {
+		_, err := dl.Load(ctx, 0)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		nbExpectedFetches := i + 1
+		if len(fetches) != nbExpectedFetches {
+			t.Fatalf("wrong number of fetches, got %d expected %d", fetches, nbExpectedFetches)
+		}
+		if len(fetches[i]) != 1 {
+			t.Fatal("wrong number of keys in fetch request")
+		}
+	}
+
+	nbFetchesBefore := len(fetches)
+	for i := 0; i < 2; i++ {
+		r, err := dl.Load(ctx, 1)
+		if err != nil {
+			t.Fatalf("unexpected error %v", err)
+		}
+		nbExpectedFetches := nbFetchesBefore + i + 1
+		if len(fetches) != nbExpectedFetches {
+			t.Fatalf("wrong number of fetches, got %d expected %d", fetches, nbExpectedFetches)
+		}
+		j := nbFetchesBefore + i
+		if len(fetches[j]) != 1 {
+			t.Fatal("wrong number of keys in fetch request")
+		}
+		if r != "1" {
+			t.Fatal("wrong data fetched", r)
+		}
+	}
+}
+
+// TestWithoutCachePrimed validates that primed cache values are not used when the cache is disabled.
+func TestWithoutCachePrimed(t *testing.T) {
+	ctx := context.Background()
+	var fetches [][]int
+	var mu sync.Mutex
+	dl := dataloadgen.NewLoader(func(_ context.Context, keys []int) ([]string, []error) {
+		mu.Lock()
+		fetches = append(fetches, keys)
+		mu.Unlock()
+
+		results := make([]string, len(keys))
+		errs := make([]error, len(keys))
+
+		for i, key := range keys {
+			if key%2 == 0 {
+				errs[i] = fmt.Errorf("not found")
+			} else {
+				results[i] = fmt.Sprint(key)
+			}
+		}
+		return results, errs
+	},
+		dataloadgen.WithBatchCapacity(5),
+		dataloadgen.WithWait(1*time.Millisecond),
+		dataloadgen.WithoutCache(),
+	)
+
+	if ok := dl.Prime(1, "primed-1"); ok {
+		t.Fatal("expected Prime to return false when using WithoutCache")
+	}
+
+	res_0, err_0 := dl.Load(ctx, 0)
+	if err_0 == nil {
+		t.Fatal("expected error for key 0")
+	}
+	if res_0 != "" {
+		t.Fatal("expected '' for key 0, got no error")
+	}
+	if len(fetches) != 1 {
+		t.Fatalf("expected 1 fetch, got %d", len(fetches))
+	}
+
+	res_1, err_1 := dl.Load(ctx, 1)
+	if err_1 != nil {
+		t.Fatalf("unexpected error for key 1: %v", err_0)
+	}
+	if res_1 != "1" {
+		t.Fatalf("expected '1' for key 1, got %s", res_1)
+	}
+	if len(fetches) != 2 {
+		t.Fatalf("expected 2 fetches, got %d", len(fetches))
+	}
+
+	res_2, err_2 := dl.Load(ctx, 2)
+	if err_2 == nil {
+		t.Fatalf("expected error for key 2, got no error")
+	}
+	if res_2 != "" {
+		t.Fatalf("expected '' for key 2, got %s", res_2)
+	}
+	if len(fetches) != 3 {
+		t.Fatalf("expected 3 fetches, got %d", len(fetches))
+	}
+
+	res_1_again, err_1_again := dl.Load(ctx, 1)
+	if err_1_again != nil {
+		t.Fatalf("unexpected error for key 1: %v", err_0)
+	}
+	if res_1_again != "1" {
+		t.Fatalf("expected '1' for key 1, got %s", res_1_again)
+	}
+
+	wantFetches := [][]int{
+		{0},
+		{1},
+		{2},
+		{1},
+	}
+	if !reflect.DeepEqual(wantFetches, fetches) {
+		t.Fatalf("expected fetches to be %v, got %v", wantFetches, fetches)
 	}
 }
 

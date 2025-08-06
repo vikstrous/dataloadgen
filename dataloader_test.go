@@ -409,13 +409,10 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("all methods on NoCache are Noops", func(t *testing.T) {
-		t.Skip("not supported yet")
 		t.Parallel()
 		identityLoader, loadCalls := NoCacheLoader(0)
 		identityLoader.Prime("A", "Cached")
 		identityLoader.Prime("B", "B")
-
-		// identityLoader.ClearAll()
 
 		identityLoader.Clear("1")
 		future1 := identityLoader.LoadThunk(ctx, "1")
@@ -444,7 +441,6 @@ func TestLoader(t *testing.T) {
 	})
 
 	t.Run("no cache does not cache anything", func(t *testing.T) {
-		t.Skip("not supported yet")
 		t.Parallel()
 		identityLoader, loadCalls := NoCacheLoader(0)
 		identityLoader.Prime("A", "Cached")
@@ -565,14 +561,16 @@ func BadLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 func NoCacheLoader(max int) (*dataloadgen.Loader[string, string], *[][]string) {
 	var mu sync.Mutex
 	var loadCalls [][]string
-	// cache := &NoCache{}
 	identityLoader := dataloadgen.NewLoader(func(_ context.Context, keys []string) (results []string, errs []error) {
 		mu.Lock()
 		loadCalls = append(loadCalls, keys)
 		mu.Unlock()
 		results = append(results, keys...)
 		return results, nil
-	}, /*dataloadgen.WithCache(cache),*/ dataloadgen.WithBatchCapacity(max))
+	},
+		dataloadgen.WithoutCache(),
+		dataloadgen.WithBatchCapacity(max),
+	)
 	return identityLoader, &loadCalls
 }
 
